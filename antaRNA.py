@@ -1107,73 +1107,10 @@ def getGCSamplingValue(GC, tGCmax, tGCvar):
 			returnval = float(numpy.random.normal(GC, tGCvar, 1))
 		return returnval
 	
-def reachableGC(C_seq):
-    """
-        Checks if a demanded GC target content is reachable in dependence with the given sequence constraint.
-        For each explicit and ambiguous character definition within the constraint, the respective possibilities
-        are elicited: "A" counts as "A", but for "B", also an "U" is possible, at the same time, "G" or "C" are possible
-        as well. So two scenarios can be evaluated: A minimum GC content, which is possible and a maximum GC content.
-        For this, for all not "N" letters their potential towards  their potentials is evaluated and counted in the
-        respective counters for min and max GC content. Only those characters are taken into concideration which would enforce
-        a categorial pyrimidine/purine decision. (ACGU, SW)
-        
-    """
-    nucleotide_contribution = 1/float(len(C_seq)) * 1
-    
-    minGC = 0.0
-    maxGC = 1.0
-    for i in C_seq:
-        if i != "N":
-            if i == "A" or i == "U":
-                maxGC -= nucleotide_contribution
-            elif i == "C" or i == "G":
-                minGC += nucleotide_contribution
-            elif i == "S":#(G or C)
-                minGC += nucleotide_contribution
-            elif i == "W":#(A or T/U):
-                maxGC -= nucleotide_contribution
-    return (minGC, maxGC)
+
   
   
-def parse_GC_management(args):
 
-	if len(args.tGC) == 1 and type(args.tGC[0]) is float: # CASE Only one tGC value is defined, which needs to account for the whole terrain
-		tgc = args.tGC.pop()
-		args.tGC.append((tgc, 1, len(args.Cstr)))
-		
-	for t in args.tGC:
-		if len(t) != 3:
-			print "Error :: Not enough tGC and affiliated areas declarations"
-			exit(1)
-			
-	check_set = set(range(1,len(args.Cstr) + 1))
-	curr_set = set()
-	for i, area in enumerate(args.tGC): # CHECK if the areas are consistent and do not show disconnectivity.
-		v, s1, s2 = area
-		if i < 0 or i > 1:
-			print "Error: Chosen tGC > %s < not in range [0,1]" % (i)
-			exit(1)
-		tmp_set = set(range(int(s1), int(s2 + 1)))
-		if len(curr_set.intersection(tmp_set)) == 0:
-			curr_set = curr_set.union(tmp_set)
-		else: 
-			print "Error: Double defined tGC declaration area sector detected. Nucleotide positions", ", ".join(str(e) for e in curr_set.intersection(tmp_set)), "show(s) redundant tGC declaration"
-			exit(1)
-	if len(curr_set.symmetric_difference(check_set)) != 0:
-		print "Error: Undefined tGC area sectors detected. Nucleotide positions", ", ".join(str(e) for e in curr_set.symmetric_difference(check_set)), "is/are not covered."
-		exit(1)
-		
-	for tgc in args.tGC: # CHECK if the specified GC values can be reached at all...
-		v, start, stop = tgc
-		tmp_sc = args.Cseq[start:stop + 1]
-		minGC, maxGC = reachableGC(tmp_sc)
-		if v > maxGC or v < minGC:
-			print >> sys.stderr, "WARNING: Chosen target GC %s content is not reachable. The selected sequence constraint contradicts the tGC constraint value." % (v) 
-			print >> sys.stderr, "Sequence Constraint allows tGC only to be in [%s,%s]" % (minGC, maxGC) 
-			exit (1)
-
-	
-	
 
 ###################################################  
 #  PRINCIPAL EXECUTION ROUTINES OF THE ACO METHOD
@@ -1203,7 +1140,6 @@ def runColony(args):
 	
 	initTerrain(args) 
 	applyTerrainModification(args)
-
 	global_ant_count = 0
 	global_best_ants = 0
 	criterion = False
@@ -1287,14 +1223,14 @@ def runColony(args):
 				best_solution_local = curr_solution
 
 		if args.verbose:
-			print "SCORE " + str(Dscore) + " Resets " + str(resets) + " #Ant " + str(global_ant_count) + " out of " + str(ants_per_selection)  + " cc " + str(convergence_counter)
+			print "SCORE " + str(Dscore) + " Resets " + str(resets) + " #Ant " + str(global_ant_count) + " out of " + str(args.ants_per_selection)  + " cc " + str(convergence_counter)
 
 			print args.Cstr, " <- target struct" 
-			print best_solution[0] , " <- BS since ", str(best_solution_since), "Size of Terrrain:", len(terrain[0])
-			print best_solution[1] , " <- BS Dscore " + str(best_solution[2]) + " ds " + str(best_solution[3]) + " dGC " + str(best_solution[4]) + " dseq " + str(best_solution[5])+ " LP " + str(len(LP)) + " <- best solution stats"
+			print best_solution[0] , " <- BS since ", str(best_solution_since), "Size of Terrrain:", len(args.terrain)
+			print best_solution[1] , " <- BS Dscore " + str(best_solution[2]) + " ds " + str(best_solution[3]) + " dGC " + str(best_solution[4]) + " dseq " + str(best_solution[5])+ " LP " + str(len(args.LP)) + " <- best solution stats"
 			print curr_structure, " <- CS"
-			print path,
-			print " <- CS", "Dscore", str(Dscore), "ds", ds, "dGC", dGC, "GC", getGC(path)*100, "Dseq", dseq
+			print sequence,
+			print " <- CS", "Dscore", str(Dscore), "ds", ds, "dGC", dGC, "GC", getGC(sequence)*100, "Dseq", dseq
 
 		#### UPDATING THE TERRAIN ACCORDING TO THE QUALITY OF THE CURRENT BESTO-OUT-OF-k SOLUTION
 		updateTerrain(sequence, curr_structure, ds, dGC, dseq, args) 
@@ -1458,60 +1394,9 @@ def findSequence(args):
 	if print_to_STDOUT == False:    
 		os.chdir(curr_dir)
   
-def execute(args):
-	"""
-		CHECK THE COMMAND LINE STUFF
-	"""
 
-	structure_constraint = args.Cstr
-	
-	if args.Cseq == "":
-		args.Cseq = "N" * len(args.Cstr)
+			
 
-	parse_GC_management(args)
-
-	checkForViennaTools()
-	if args.pseudoknots:
-		if args.pkprogram == "pKiss":
-			checkForpKiss()
-			if args.pkparameter == True:
-				args.alpha = 1.0
-				args.beta = 0.1
-				args.ER = 0.2 
-				args.Cstrweight = 0.1 
-				args.Cgcweight = 1.0 
-				args.Cseqweight = 0.5 
-				args.Cseqweight = 50 
-				args.ConvergenceCount = 100
-			
-		elif args.pkprogram == "HotKnots" and args.HotKnots_PATH != "":
-			checkForHotKnots(args)
-			if args.pkparameter == True:
-				args.alpha = 1.0
-				args.beta = 0.1
-				args.ER = 0.2 
-				args.Cstrweight = 0.1 
-				args.Cgcweight = 1.0 
-				args.Cseqweight = 0.5 
-				args.Cseqweight = 50 
-				args.ConvergenceCount = 100
-			
-		elif args.pkprogram == "IPKnot":
-			checkForIPKnot()
-			if args.pkparameter == True:
-				args.alpha = 1.0
-				args.beta = 0.1
-				args.ER = 0.2 
-				args.Cstrweight = 0.1 
-				args.Cgcweight = 1.0 
-				args.Cseqweight = 0.5 
-				args.Cseqweight = 50 
-				args.ConvergenceCount = 100	
-		else:
-			print " Please choose a suitable pseudoknot predictor: [pKiss|Hotknots|IPKnot]"
-			exit(1)
-			
-	findSequence(args)
 
 
 	
@@ -1734,70 +1619,276 @@ def exe():
 								type=int, 
 								default=600)		
 	
-	args = argument_parser.parse_args()
+	argparse_arguments = argument_parser.parse_args()
 
-	execute(args)
+	antaRNA_variables = AntaRNAVariables()
+	antaRNA_variables.readArgParseArguments(argparse_arguments)
 	
-	
+	antaRNA_variables.varCheck()
+	findSequence(antaRNA_variables)
+
 	
 ##########################
 # PROGRAM PRESENCE CHECK
 ##########################
 
-def checkForViennaTools():
+
+
+#########################
+### CLASSES
+#########################
+
+
+class AntaRNAVariables:
 	"""
-	Checking for the presence of the Vienna tools in the system by which'ing for RNAfold and RNAdistance
+		antaRNA Variables management.
 	"""
-	RNAfold_output = subprocess.Popen(["which", "RNAfold"], stdout=subprocess.PIPE).communicate()[0].strip()
-	if len(RNAfold_output) > 0 and RNAfold_output.find("found") == -1 and RNAfold_output.find(" no ") == -1:
-		return True
-	else:
-		print "It seems the Vienna RNA Package is not installed on your machine. Please do so!"
-		print "You can get it at http://www.tbi.univie.ac.at/"
-		exit(0)
+	def __init__(self):
+		self.Cstr = ""
+		self.Cseq = ""
+		self.tGC = []
+		self.level = 1
+		self.tGCmax = -1.0
+		self.tGCvar = -1.0
+		self.temperature = 37.0
+		self.paramFile = ""
+		self.noGUBasePair = False
+		self.noLBPmanagement = True
+		self.pseudoknots = False
+		self.pkprogram = "pKiss"
+		self.pkparameter = False
+		self.HotKnots_PATH = ""
+		self.strategy = "A"
+		self.noOfColonies = 1
+		self.output_file = "STDOUT"
+		self.return_PY = False
+		self.name="antaRNA"
+		self.verbose = False 
+		self.output_verbose = False
+		self.seed ="none"
+		self.improve_procedure = "s"
+		self.Resets = 5
+		self.ants_per_selection = 10
+		self.ConvergenceCount = 130
+		self.antsTerConv = 50
+		self.alpha = 1.0
+		self.beta = 1.0
+		self.ER = 0.2
+		self.Cstrweight = 0.5
+		self.Cgcweight = 5.0
+		self.Cseqweight = 1.0
+		self.omega = 2.23
+		self.time = 600
+		
+	def readArgParseArguments(self, args):
+		self.Cstr = args.Cstr
+		self.Cseq = args.Cseq
+		self.tGC = args.tGC
+		self.level = args.level
+		self.tGCmax = args.tGCmax
+		self.tGCvar = args.tGCvar
+		self.temperature = args.temperature
+		self.paramFile = args.paramFile
+		self.noGUBasePair = args.noGUBasePair
+		self.noLBPmanagement = args.noLBPmanagement
+		self.pseudoknots = args.pseudoknots
+		self.pkprogram = args.pkprogram
+		self.pkparameter = args.pkparameter
+		self.HotKnots_PATH = args.HotKnots_PATH
+		self.strategy = args.strategy
+		self.noOfColonies = args.noOfColonies
+		self.output_file = args.output_file
+		self.return_PY = args.return_PY
+		self.name = args.name
+		self.verbose = args .verbose
+		self.output_verbose = args.output_verbose
+		self.seed = args.seed
+		self.improve_procedure = args.improve_procedure
+		self.Resets = args.Resets
+		self.ants_per_selection = args.ants_per_selection
+		self.ConvergenceCount = args.ConvergenceCount
+		self.antsTerConv = args.antsTerConv
+		self.alpha = args.alpha
+		self.beta = args.beta
+		self.ER = args.ER
+		self.Cstrweight = args.Cstrweight
+		self.Cgcweight = args.Cgcweight
+		self.Cseqweight = args.Cseqweight
+		self.omega = args.omega
+		self.time = args.time
+
+	def varCheck(self):
+		"""
+			CHECK THE COMMAND LINE STUFF
+		"""
+
+		if self.Cseq == "":
+			self.Cseq = "N" * len(self.Cstr)
+
+		self.parse_GC_management()
+
+		self.checkForViennaTools()
+		if self.pseudoknots:
+			if self.pkprogram == "pKiss":
+				self.checkForpKiss()
+				if self.pkparameter == True:
+					self.alpha = 1.0
+					self.beta = 0.1
+					self.ER = 0.2 
+					self.Cstrweight = 0.1 
+					self.Cgcweight = 1.0 
+					self.Cseqweight = 0.5 
+					self.Cseqweight = 50 
+					self.ConvergenceCount = 100
+				
+			elif self.pkprogram == "HotKnots" and self.HotKnots_PATH != "":
+				self.checkForHotKnots(args)
+				if self.pkparameter == True:
+					self.alpha = 1.0
+					self.beta = 0.1
+					self.ER = 0.2 
+					self.Cstrweight = 0.1 
+					self.Cgcweight = 1.0 
+					self.Cseqweight = 0.5 
+					self.Cseqweight = 50 
+					self.ConvergenceCount = 100
+				
+			elif self.pkprogram == "IPKnot":
+				self.checkForIPKnot()
+				if self.pkparameter == True:
+					self.alpha = 1.0
+					self.beta = 0.1
+					self.ER = 0.2 
+					self.Cstrweight = 0.1 
+					self.Cgcweight = 1.0 
+					self.Cseqweight = 0.5 
+					self.Cseqweight = 50 
+					self.ConvergenceCount = 100	
+			else:
+				print " Please choose a suitable pseudoknot predictor: [pKiss|Hotknots|IPKnot]"
+				exit(1)
+	def reachableGC(self):
+		"""
+			Checks if a demanded GC target content is reachable in dependence with the given sequence constraint.
+			For each explicit and ambiguous character definition within the constraint, the respective possibilities
+			are elicited: "A" counts as "A", but for "B", also an "U" is possible, at the same time, "G" or "C" are possible
+			as well. So two scenarios can be evaluated: A minimum GC content, which is possible and a maximum GC content.
+			For this, for all not "N" letters their potential towards  their potentials is evaluated and counted in the
+			respective counters for min and max GC content. Only those characters are taken into concideration which would enforce
+			a categorial pyrimidine/purine decision. (ACGU, SW)
+			
+		"""
+		nucleotide_contribution = 1/float(len(self.Cseq)) * 1
+		
+		minGC = 0.0
+		maxGC = 1.0
+		for i in self.Cseq:
+			if i != "N":
+				if i == "A" or i == "U":
+					maxGC -= nucleotide_contribution
+				elif i == "C" or i == "G":
+					minGC += nucleotide_contribution
+				elif i == "S":#(G or C)
+					minGC += nucleotide_contribution
+				elif i == "W":#(A or T/U):
+					maxGC -= nucleotide_contribution
+		return (minGC, maxGC)	
+	
+	
+	def parse_GC_management(self):
+
+		if len(self.tGC) == 1 and type(self.tGC[0]) is float: # CASE Only one tGC value is defined, which needs to account for the whole terrain
+			tgc = self.tGC.pop()
+			self.tGC.append((tgc, 1, len(self.Cstr)))
+			
+		for t in self.tGC:
+			if len(t) != 3:
+				print "Error :: Not enough tGC and affiliated areas declarations"
+				exit(1)
+				
+		check_set = set(range(1,len(self.Cstr) + 1))
+		curr_set = set()
+		for i, area in enumerate(self.tGC): # CHECK if the areas are consistent and do not show disconnectivity.
+			v, s1, s2 = area
+			if i < 0 or i > 1:
+				print "Error: Chosen tGC > %s < not in range [0,1]" % (i)
+				exit(1)
+			tmp_set = set(range(int(s1), int(s2 + 1)))
+			if len(curr_set.intersection(tmp_set)) == 0:
+				curr_set = curr_set.union(tmp_set)
+			else: 
+				print "Error: Double defined tGC declaration area sector detected. Nucleotide positions", ", ".join(str(e) for e in curr_set.intersection(tmp_set)), "show(s) redundant tGC declaration"
+				exit(1)
+		if len(curr_set.symmetric_difference(check_set)) != 0:
+			print "Error: Undefined tGC area sectors detected. Nucleotide positions", ", ".join(str(e) for e in curr_set.symmetric_difference(check_set)), "is/are not covered."
+			exit(1)
+			
+		for tgc in self.tGC: # CHECK if the specified GC values can be reached at all...
+			v, start, stop = tgc
+			tmp_sc = self.Cseq[start:stop + 1]
+			minGC, maxGC = self.reachableGC()
+			if v > maxGC or v < minGC:
+				print >> sys.stderr, "WARNING: Chosen target GC %s content is not reachable. The selected sequence constraint contradicts the tGC constraint value." % (v) 
+				print >> sys.stderr, "Sequence Constraint allows tGC only to be in [%s,%s]" % (minGC, maxGC) 
+				exit (1)
+
+
+	
+
+	def checkForViennaTools(self):
+		"""
+		Checking for the presence of the Vienna tools in the system by which'ing for RNAfold and RNAdistance
+		"""
+		RNAfold_output = subprocess.Popen(["which", "RNAfold"], stdout=subprocess.PIPE).communicate()[0].strip()
+		if len(RNAfold_output) > 0 and RNAfold_output.find("found") == -1 and RNAfold_output.find(" no ") == -1:
+			return True
+		else:
+			print "It seems the Vienna RNA Package is not installed on your machine. Please do so!"
+			print "You can get it at http://www.tbi.univie.ac.at/"
+			exit(0)
 
 		
-def checkForpKiss():
-	"""
-		Checking for the presence of pKiss
-	"""
-  	#pKiss_output = subprocess.Popen(["which", "pKiss_mfe"], stdout=subprocess.PIPE).communicate()[0].strip()
-  	pKiss_output = subprocess.Popen(["which", "/usr/local/pkiss/2014-03-17/bin/pKiss_mfe"], stdout=subprocess.PIPE).communicate()[0].strip()
-	if len(pKiss_output) > 0 and pKiss_output.find("found") == -1 and pKiss_output.find(" no ") == -1:
-		return True
-	else:
-		print "It seems that pKiss is not installed on your machine. Please do so!"
-		print "You can get it at http://bibiserv2.cebitec.uni-bielefeld.de/pkiss"
-		exit(0)
+	def checkForpKiss(self):
+		"""
+			Checking for the presence of pKiss
+		"""
+		pKiss_output = subprocess.Popen(["which", "pKiss_mfe"], stdout=subprocess.PIPE).communicate()[0].strip()
+		#pKiss_output = subprocess.Popen(["which", "/usr/local/pkiss/2014-03-17/bin/pKiss_mfe"], stdout=subprocess.PIPE).communicate()[0].strip()
+		if len(pKiss_output) > 0 and pKiss_output.find("found") == -1 and pKiss_output.find(" no ") == -1:
+			return True
+		else:
+			print "It seems that pKiss is not installed on your machine. Please do so!"
+			print "You can get it at http://bibiserv2.cebitec.uni-bielefeld.de/pkiss"
+			exit(0)
 
-def checkForIPKnot():
-	"""
-		Checking for the presence of IPKnot
-	"""
-  	pKiss_output = subprocess.Popen(["which", "ipknot"], stdout=subprocess.PIPE).communicate()[0].strip()
-	if len(pKiss_output) > 0 and pKiss_output.find("found") == -1 and pKiss_output.find(" no ") == -1:
-		return True
-	else:
-		print "It seems that IPKnot is not installed on your machine. Please do so!"
-		print "You can get it at http://rtips.dna.bio.keio.ac.jp/ipknot/"
-		exit(0)
+	def checkForIPKnot(self):
+		"""
+			Checking for the presence of IPKnot
+		"""
+		pKiss_output = subprocess.Popen(["which", "ipknot"], stdout=subprocess.PIPE).communicate()[0].strip()
+		if len(pKiss_output) > 0 and pKiss_output.find("found") == -1 and pKiss_output.find(" no ") == -1:
+			return True
+		else:
+			print "It seems that IPKnot is not installed on your machine. Please do so!"
+			print "You can get it at http://rtips.dna.bio.keio.ac.jp/ipknot/"
+			exit(0)
 
-def checkForHotKnots(args):
-	"""
-		Checking for the presence of HotKnots
-	"""
-	cmd = args.HotKnots_PATH + "/HotKnots"
-	
-  	#HotKnots_output = subprocess.Popen([cmd], stdout=subprocess.PIPE).communicate()[0].strip()
-	#if len(HotKnots_output) > 0 and HotKnots_output.find("found") == -1 and HotKnots_output.find(" no ") == -1:
-		#return True
-	
-	if os.path.exists(cmd):
-		return True
-	else:
-		print "It seems that HotKnots is not installed on your machine. Please do so!"
-		print "You can get it at http://www.cs.ubc.ca/labs/beta/Software/HotKnots/"
-		exit(0)
+	def checkForHotKnots(self):
+		"""
+			Checking for the presence of HotKnots
+		"""
+		cmd = self.HotKnots_PATH + "/HotKnots"
+		
+		#HotKnots_output = subprocess.Popen([cmd], stdout=subprocess.PIPE).communicate()[0].strip()
+		#if len(HotKnots_output) > 0 and HotKnots_output.find("found") == -1 and HotKnots_output.find(" no ") == -1:
+			#return True
+		
+		if os.path.exists(cmd):
+			return True
+		else:
+			print "It seems that HotKnots is not installed on your machine. Please do so!"
+			print "You can get it at http://www.cs.ubc.ca/labs/beta/Software/HotKnots/"
+			exit(0)
 
 #########################
 # ENTRY TO THE ANT HIVE
