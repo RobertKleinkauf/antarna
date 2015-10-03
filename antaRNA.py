@@ -1319,81 +1319,7 @@ def runColony(args):
 
 	return (retString, retString2) 
 
-def findSequence(args):
-	"""
-		MAIN antaRNA - ant assembled RNA
-	"""
 
-	if args.seed != "none":
-		random.seed(args.seed)
-	
-	print_to_STDOUT = (args.output_file == "STDOUT")
-
-	if args.return_PY == False:
-		if print_to_STDOUT == False:
-			outfolder = '/'.join(args.output_file.strip().split("/")[:-1])
-			curr_dir = os.getcwd()
-			if not os.path.exists(outfolder):
-				os.makedirs(outfolder)
-			os.chdir(outfolder)  
-		
-	args.Cseq = transform(args.Cseq)
-  
-	# Allowed deviation from the structural target:
-	args.objective_to_target_distance = 0.0
-
-	# Loading the IUPAC copatibilities of nuleotides and their abstract representing symbols
-	args.IUPAC = {"A":"A", "C":"C", "G":"G", "U":"U", "R":"AG", "Y":"CU", "S":"GC", "W":"AU","K":"GU", "M":"AC", "B":"CGU", "D":"AGU", "H":"ACU", "V":"ACG", "N":"ACGU"}         
-	args.IUPAC_compatibles = loadIUPACcompatibilities(args)
-
-	
-	if args.noGUBasePair == True: ## Without the GU basepair
-		args.IUPAC_reverseComplements = {"A":"U", "C":"G", "G":"C", "U":"A", "R":"UC", "Y":"AG", "S":"GC", "W":"UA","K":"CA", "M":"UG", "B":"AGC", "D":"ACU", "H":"UGA", "V":"UGC", "N":"ACGU"}         
-	else: ## allowing the GU basepair
-		args.IUPAC_reverseComplements = {"A":"U", "C":"G", "G":"UC", "U":"AG", "R":"UC", "Y":"AG", "S":"UGC", "W":"UAG","K":"UCAG", "M":"UG", "B":"AGCU", "D":"AGCU", "H":"UGA", "V":"UGC", "N":"ACGU"}         
-	
-	result = []
-
-	for col in xrange(args.noOfColonies):
-		# Checking the kind of taget GC value should be used
-		args.GC = []
-		if len(args.tGC) == 1:
-			args.GC.append((getGCSamplingValue(args.tGC[0][0], args.tGCmax, args.tGCvar), args.tGC[0][1], args.tGC[0][2]))
-		else:
-			args.GC = args.tGC
-
-		# Actual execution of a ant colony procesdure
-		output_v, output_w  =  runColony(args)
-
-		# Post-Processing the output of a ant colony procedure
-		line = ">" + args.name + "#" + str(col)
-		if args.output_verbose:
-			
-			GC_out = ""
-			for i in args.GC:
-				v, s1, s2 = i
-				GC_out += str(s1) + "-" + str(s2) + ">" + str(v) + ";"
-			GC_out = GC_out[:-1]
-			
-			line += "|Cstr:" + args.Cstr + "|Cseq:" + args.Cseq + "|Alpha:" + str(args.alpha) + "|Beta:" + str(args.beta) + "|tGC:" + str(GC_out) + "|ER:" + str(args.ER) + "|Struct_CT:" + str(args.Cstrweight) + "|GC_CT:" + str(args.Cgcweight) + "|Seq_CT:" + str(args.Cseqweight) + output_v + "\n" + "\n".join(output_w)  
-		else:
-			line += "\n" + output_w[0]
-		if args.return_PY == False:
-			if print_to_STDOUT:
-				print line
-			else:
-				if col == 0:
-					print2file(args.output_file, line, 'w')
-				else:
-					print2file(args.output_file, line, 'a')
-		else:
-			result.append(line)
-
-	if args.return_PY == True:
-		return result
-	if print_to_STDOUT == False:    
-		os.chdir(curr_dir)
-  
 
 			
 
@@ -1621,11 +1547,16 @@ def exe():
 	
 	argparse_arguments = argument_parser.parse_args()
 
-	antaRNA_variables = AntaRNAVariables()
-	antaRNA_variables.readArgParseArguments(argparse_arguments)
 	
-	antaRNA_variables.varCheck()
-	findSequence(antaRNA_variables)
+	hill = AntHill()
+	hill.params.readArgParseArguments(argparse_arguments)
+	hill.params.varCheck()
+	hill.findSequence()
+	#antaRNA_variables = AntaRNAVariables()
+	#antaRNA_variables.readArgParseArguments(argparse_arguments)
+	
+	#antaRNA_variables.varCheck()
+	#findSequence(antaRNA_variables)
 
 	
 ##########################
@@ -1637,8 +1568,90 @@ def exe():
 #########################
 ### CLASSES
 #########################
+class AntHill:
+	"""
+		antaRNA AntHill. Can perform varoius actions! :)
+	"""
+	
+	def __init__(self):
+		self.params = AntaRNAVariables()
+	
+	def findSequence(self):
+		"""
+			MAIN antaRNA - ant assembled RNA
+		"""
 
+		if self.params.seed != "none":
+			random.seed(self.params.seed)
+		
+		print_to_STDOUT = (self.params.output_file == "STDOUT")
 
+		if self.params.return_PY == False:
+			if print_to_STDOUT == False:
+				outfolder = '/'.join(self.params.output_file.strip().split("/")[:-1])
+				curr_dir = os.getcwd()
+				if not os.path.exists(outfolder):
+					os.makedirs(outfolder)
+				os.chdir(outfolder)  
+			
+		self.params.Cseq = transform(self.params.Cseq)
+	  
+		# Allowed deviation from the structural target:
+		self.params.objective_to_target_distance = 0.0
+
+		# Loading the IUPAC copatibilities of nuleotides and their abstract representing symbols
+		self.params.IUPAC = {"A":"A", "C":"C", "G":"G", "U":"U", "R":"AG", "Y":"CU", "S":"GC", "W":"AU","K":"GU", "M":"AC", "B":"CGU", "D":"AGU", "H":"ACU", "V":"ACG", "N":"ACGU"}         
+		self.params.IUPAC_compatibles = loadIUPACcompatibilities(self.params)
+
+		
+		if self.params.noGUBasePair == True: ## Without the GU basepair
+			self.params.IUPAC_reverseComplements = {"A":"U", "C":"G", "G":"C", "U":"A", "R":"UC", "Y":"AG", "S":"GC", "W":"UA","K":"CA", "M":"UG", "B":"AGC", "D":"ACU", "H":"UGA", "V":"UGC", "N":"ACGU"}         
+		else: ## allowing the GU basepair
+			self.params.IUPAC_reverseComplements = {"A":"U", "C":"G", "G":"UC", "U":"AG", "R":"UC", "Y":"AG", "S":"UGC", "W":"UAG","K":"UCAG", "M":"UG", "B":"AGCU", "D":"AGCU", "H":"UGA", "V":"UGC", "N":"ACGU"}         
+		
+		result = []
+
+		for col in xrange(self.params.noOfColonies):
+			# Checking the kind of taget GC value should be used
+			self.params.GC = []
+			if len(self.params.tGC) == 1:
+				self.params.GC.append((getGCSamplingValue(self.params.tGC[0][0], self.params.tGCmax, self.params.tGCvar), self.params.tGC[0][1], self.params.tGC[0][2]))
+			else:
+				self.params.GC = self.params.tGC
+
+			# Actual execution of a ant colony procesdure
+			output_v, output_w  =  runColony(self.params)
+
+			# Post-Processing the output of a ant colony procedure
+			line = ">" + self.params.name + "#" + str(col)
+			if self.params.output_verbose:
+				
+				GC_out = ""
+				for i in self.params.GC:
+					v, s1, s2 = i
+					GC_out += str(s1) + "-" + str(s2) + ">" + str(v) + ";"
+				GC_out = GC_out[:-1]
+				
+				line += "|Cstr:" + self.params.Cstr + "|Cseq:" + self.params.Cseq + "|Alpha:" + str(self.params.alpha) + "|Beta:" + str(self.params.beta) + "|tGC:" + str(GC_out) + "|ER:" + str(self.params.ER) + "|Struct_CT:" + str(self.params.Cstrweight) + "|GC_CT:" + str(self.params.Cgcweight) + "|Seq_CT:" + str(self.params.Cseqweight) + output_v + "\n" + "\n".join(output_w)  
+			else:
+				line += "\n" + output_w[0]
+			if self.params.return_PY == False:
+				if print_to_STDOUT:
+					print line
+				else:
+					if col == 0:
+						print2file(self.params.output_file, line, 'w')
+					else:
+						print2file(self.params.output_file, line, 'a')
+			else:
+				result.append(line)
+
+		if self.params.return_PY == True:
+			return result
+		if print_to_STDOUT == False:    
+			os.chdir(curr_dir)
+  
+	
 class AntaRNAVariables:
 	"""
 		antaRNA Variables management.
