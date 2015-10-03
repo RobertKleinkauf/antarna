@@ -1112,212 +1112,7 @@ def getGCSamplingValue(GC, tGCmax, tGCvar):
   
 
 
-###################################################  
-#  PRINCIPAL EXECUTION ROUTINES OF THE ACO METHOD
-###################################################
 
-def runColony(args):
-	"""
-		Execution function of a single ant colony finding one solution sequence
-	"""
-	
-	# Constraint Checks prior to execution
-	checkSimilarLength(args.Cstr, args.Cseq)
-	isValidStructure(args.Cstr)
-	checkSequenceConstraint(args.Cseq)
-	
-	args.BPstack , args.LP = getBPStack(args)
-	checkConstaintCompatibility(args)
-
-	retString = ""
-	retString2 = []
-
-	start_time = time.time()
-
-	# INITIALIZATION OF Vienna RNAfold
-	RNAfold = init_RNAfold(213, args.temperature, args.paramFile)
-	RNAfold_pattern = re.compile('.+\n([.()]+)\s.+')
-	
-	initTerrain(args) 
-	applyTerrainModification(args)
-	global_ant_count = 0
-	global_best_ants = 0
-	criterion = False
-	met = True  
-	ant_no = 1
-	prev_res = 0
-	seq = ""
-
-	counter = 0
-	
-	dstruct_log = []
-	dGC_log = []
-		
-	convergence_counter = 0
-	
-	resets = 0
-	path = ""
-	curr_structure = ""
-
-	Dscore = 100000
-	ds = 10000
-	dGC = 10000
-	dseq = 10000
-	best_solution = (path, curr_structure, Dscore, ds, dGC, dseq)
-	best_solution_local = (path, curr_structure, Dscore, ds, dGC, dseq)
-	
-	best_solution_since = 0
-	
-	
-	
-	# IN CASE OF LP-MANAGEMENT
-	if args.noLBPmanagement:
-		if len(args.LP) > 0 :
-			for lp in args.LP:
-				args.Cstr = substr(lp + 1, args.Cstr, ".")
-				args.Cstr = substr(args.LP[lp] + 1, args.Cstr, ".")
-
-	init = 1
-	used_time = getUsedTime(start_time)
-	while criterion != met and used_time < args.time:
-		iteration_start = time.time()
-		global_ant_count += 1
-		global_best_ants += 1
-
-		path_info = getPathFromSelection(args, RNAfold, RNAfold_pattern)
-
-		distance_structural_prev = ds
-		distance_GC_prev = dGC
-		distance_seq_prev = dseq
-
-		sequence, Dscore , ds, dGC, dseq = path_info
-		curr_structure = ""
-		if args.pseudoknots:
-			if args.pkprogram == "pKiss":
-				curr_structure = getPKStructure(sequence, args)
-			elif args.pkprogram == "HotKnots":
-				curr_structure = getHKStructure(sequence, args)
-			elif args.pkprogram == "IPKnot":
-				curr_structure = getIPKnotStructure(sequence)
-		else:
-			curr_structure = getRNAfoldStructure(sequence, RNAfold)
-			
-		curr_solution = (sequence, curr_structure, Dscore, ds, dGC, dseq)
-		# BEST SOLUTION PICKING
-		if args.improve_procedure == "h": # hierarchical check
-			# for the global best solution
-			if ds < best_solution[3] or (ds == best_solution[3] and dGC < best_solution[4]):
-				best_solution = curr_solution
-				ant_no = 1
-			# for the local (reset) best solution
-			if ds < best_solution_local[3] or (ds == best_solution_local[3] and dGC < best_solution_local[4]):
-				best_solution_local = curr_solution
-				
-		elif args.improve_procedure == "s": #score based check
-			# store best global solution
-			if Dscore < best_solution[2]:
-				best_solution = curr_solution
-				ant_no = 1
-			# store best local solution for this reset
-			if Dscore < best_solution_local[2]:
-				best_solution_local = curr_solution
-
-		if args.verbose:
-			print "SCORE " + str(Dscore) + " Resets " + str(resets) + " #Ant " + str(global_ant_count) + " out of " + str(args.ants_per_selection)  + " cc " + str(convergence_counter)
-
-			print args.Cstr, " <- target struct" 
-			print best_solution[0] , " <- BS since ", str(best_solution_since), "Size of Terrrain:", len(args.terrain)
-			print best_solution[1] , " <- BS Dscore " + str(best_solution[2]) + " ds " + str(best_solution[3]) + " dGC " + str(best_solution[4]) + " dseq " + str(best_solution[5])+ " LP " + str(len(args.LP)) + " <- best solution stats"
-			print curr_structure, " <- CS"
-			print sequence,
-			print " <- CS", "Dscore", str(Dscore), "ds", ds, "dGC", dGC, "GC", getGC(sequence)*100, "Dseq", dseq
-
-		#### UPDATING THE TERRAIN ACCORDING TO THE QUALITY OF THE CURRENT BESTO-OUT-OF-k SOLUTION
-		updateTerrain(sequence, curr_structure, ds, dGC, dseq, args) 
-
-		if args.verbose: print "Used time for one iteration", time.time() - iteration_start
-			
-			
-		# CONVERGENCE AND TERMINATION CRITERION MANAGEMENT
-		if inConvergenceCorridor(curr_solution[3], curr_solution[4], curr_solution[5], best_solution_local[3], best_solution_local[4], best_solution_local[5]):
-			convergence_counter += 1
-		if distance_structural_prev == ds and distance_GC_prev == dGC and distance_seq_prev == dseq:
-			convergence_counter += 1
-
-		if best_solution[3] == args.objective_to_target_distance:
-			if best_solution[4] == 0.0:
-				if best_solution[5] == 0.0:
-					break
-			ant_no = ant_no + 1
-			convergence_counter -= 1
-		else:
-			ant_no = 1
-
-		if ant_no == args.antsTerConv or resets >= args.Resets or global_ant_count >= 100000 or best_solution_since == 5:
-			break
-
-		# RESET
-		if ant_no < args.antsTerConv and convergence_counter >= args.ConvergenceCount:
-
-			initTerrain(args)
-			applyTerrainModification(args)
-			criterion = False
-			met = True  
-			ant_no = 1
-			prev_res = 0
-			sequence = ""
-			curr_structure = ""
-			counter = 0
-			Dscore = 100000
-			ds = 10000
-			dGC = 10000
-			dseq = 10000
-			best_solution_local = (sequence, curr_structure, Dscore, ds, dGC, dseq)
-
-			convergence_counter = 0
-
-			if resets == 0:
-				sentinel_solution = best_solution
-				best_solution_since += 1
-			else:
-				if best_solution[2] < sentinel_solution[2]:
-					sentinel_solution = best_solution
-					best_solution_since = 0
-				else:
-					best_solution_since += 1
-
-			resets += 1
-		
-		used_time = getUsedTime(start_time)
-		
-	duration  = used_time
-
-	retString += "|Ants:" + str(global_ant_count)
-	retString += "|Resets:" + str(resets) + "/" + str(args.Resets)
-	retString += "|AntsTC:" + str(args.antsTerConv) 
-	retString += "|CC:" + str(args.ConvergenceCount) 
-	retString += "|IP:" + str(args.improve_procedure) 
-	retString += "|BSS:" + str(best_solution_since)
-
-	sequence = best_solution[0]
-	struct = best_solution[1]
-
-	retString += "|LP:" + str(len(args.LP))
-	retString += "|ds:" + str(getStructuralDistance(args, sequence, RNAfold, RNAfold_pattern))
-	retString += "|dGC:" + str(best_solution[4])
-	retString += "|GC:" + str(getGC(sequence)*100)
-	retString += "|dseq:" + str(getSequenceEditDistance(args.Cseq, sequence))
-	retString += "|L:" + str(len(sequence))
-	retString += "|Time:" + str(duration)
-	
-	retString2.append(sequence)
-	retString2.append(struct)
-
-	# CLOSING THE PIPES TO THE PROGRAMS
-	if (RNAfold is not None) :
-		RNAfold.communicate()
-
-	return (retString, retString2) 
 
 
 
@@ -1456,8 +1251,8 @@ def exe():
 								type=str, 
 								default="STDOUT")
 	
-	output.add_argument("-rPY","--return_PY", 
-								help="Return result as python object. \n(DEFAULT: %(default)s)\n\n", 
+	output.add_argument("-rPY","--py", 
+								help="Switch on PYTHON compatible behavior. \n(DEFAULT: %(default)s)\n\n", 
 								action="store_true") 
 	
 	output.add_argument("--name", 
@@ -1550,20 +1345,17 @@ def exe():
 	
 	hill = AntHill()
 	hill.params.readArgParseArguments(argparse_arguments)
+	hill.params.py = False
 	hill.params.varCheck()
 	hill.findSequence()
+	
+	
 	#antaRNA_variables = AntaRNAVariables()
 	#antaRNA_variables.readArgParseArguments(argparse_arguments)
-	
 	#antaRNA_variables.varCheck()
 	#findSequence(antaRNA_variables)
 
 	
-##########################
-# PROGRAM PRESENCE CHECK
-##########################
-
-
 
 #########################
 ### CLASSES
@@ -1574,7 +1366,217 @@ class AntHill:
 	"""
 	
 	def __init__(self):
+	
 		self.params = AntaRNAVariables()
+		self.tmp_sequence = ""
+		self.tmp_structure = ""
+		self.tmp_stats = ""
+		self.tmp_result = ""
+		self.result = []
+		
+		
+	###################################################  
+	#  PRINCIPAL EXECUTION ROUTINES OF THE ACO METHOD
+	###################################################
+
+	def swarm(self):
+		"""
+			Execution function of a single ant colony finding one solution sequence
+		"""
+		
+		# Constraint Checks prior to execution
+		checkSimilarLength(self.params.Cstr, self.params.Cseq)
+		isValidStructure(self.params.Cstr)
+		checkSequenceConstraint(self.params.Cseq)
+		
+		self.params.BPstack , self.params.LP = getBPStack(self.params)
+		checkConstaintCompatibility(self.params)
+
+		retString = ""
+		retString2 = []
+
+		start_time = time.time()
+
+		# INITIALIZATION OF Vienna RNAfold
+		RNAfold = init_RNAfold(213, self.params.temperature, self.params.paramFile)
+		RNAfold_pattern = re.compile('.+\n([.()]+)\s.+')
+		
+		initTerrain(self.params) 
+		applyTerrainModification(self.params)
+		global_ant_count = 0
+		global_best_ants = 0
+		criterion = False
+		met = True  
+		ant_no = 1
+		prev_res = 0
+		seq = ""
+
+		counter = 0
+		
+		dstruct_log = []
+		dGC_log = []
+			
+		convergence_counter = 0
+		
+		resets = 0
+		path = ""
+		curr_structure = ""
+
+		Dscore = 100000
+		ds = 10000
+		dGC = 10000
+		dseq = 10000
+		best_solution = (path, curr_structure, Dscore, ds, dGC, dseq)
+		best_solution_local = (path, curr_structure, Dscore, ds, dGC, dseq)
+		
+		best_solution_since = 0
+		
+		
+		
+		# IN CASE OF LP-MANAGEMENT
+		if self.params.noLBPmanagement:
+			if len(self.params.LP) > 0 :
+				for lp in self.params.LP:
+					self.params.Cstr = substr(lp + 1, self.params.Cstr, ".")
+					self.params.Cstr = substr(self.params.LP[lp] + 1, self.params.Cstr, ".")
+
+		init = 1
+		used_time = getUsedTime(start_time)
+		while criterion != met and used_time < self.params.time:
+			iteration_start = time.time()
+			global_ant_count += 1
+			global_best_ants += 1
+
+			path_info = getPathFromSelection(self.params, RNAfold, RNAfold_pattern)
+
+			distance_structural_prev = ds
+			distance_GC_prev = dGC
+			distance_seq_prev = dseq
+
+			sequence, Dscore , ds, dGC, dseq = path_info
+			curr_structure = ""
+			if self.params.pseudoknots:
+				if self.params.pkprogram == "pKiss":
+					curr_structure = getPKStructure(sequence, self.params)
+				elif self.params.pkprogram == "HotKnots":
+					curr_structure = getHKStructure(sequence, self.params)
+				elif self.params.pkprogram == "IPKnot":
+					curr_structure = getIPKnotStructure(sequence)
+			else:
+				curr_structure = getRNAfoldStructure(sequence, RNAfold)
+				
+			curr_solution = (sequence, curr_structure, Dscore, ds, dGC, dseq)
+			# BEST SOLUTION PICKING
+			if self.params.improve_procedure == "h": # hierarchical check
+				# for the global best solution
+				if ds < best_solution[3] or (ds == best_solution[3] and dGC < best_solution[4]):
+					best_solution = curr_solution
+					ant_no = 1
+				# for the local (reset) best solution
+				if ds < best_solution_local[3] or (ds == best_solution_local[3] and dGC < best_solution_local[4]):
+					best_solution_local = curr_solution
+					
+			elif self.params.improve_procedure == "s": #score based check
+				# store best global solution
+				if Dscore < best_solution[2]:
+					best_solution = curr_solution
+					ant_no = 1
+				# store best local solution for this reset
+				if Dscore < best_solution_local[2]:
+					best_solution_local = curr_solution
+
+			if self.params.verbose:
+				print "SCORE " + str(Dscore) + " Resets " + str(resets) + " #Ant " + str(global_ant_count) + " out of " + str(self.params.ants_per_selection)  + " cc " + str(convergence_counter)
+
+				print self.params.Cstr, " <- target struct" 
+				print best_solution[0] , " <- BS since ", str(best_solution_since), "Size of Terrrain:", len(self.params.terrain)
+				print best_solution[1] , " <- BS Dscore " + str(best_solution[2]) + " ds " + str(best_solution[3]) + " dGC " + str(best_solution[4]) + " dseq " + str(best_solution[5])+ " LP " + str(len(self.params.LP)) + " <- best solution stats"
+				print curr_structure, " <- CS"
+				print sequence,
+				print " <- CS", "Dscore", str(Dscore), "ds", ds, "dGC", dGC, "GC", getGC(sequence)*100, "Dseq", dseq
+
+			#### UPDATING THE TERRAIN ACCORDING TO THE QUALITY OF THE CURRENT BESTO-OUT-OF-k SOLUTION
+			updateTerrain(sequence, curr_structure, ds, dGC, dseq, self.params) 
+
+			if self.params.verbose: print "Used time for one iteration", time.time() - iteration_start
+				
+				
+			# CONVERGENCE AND TERMINATION CRITERION MANAGEMENT
+			if inConvergenceCorridor(curr_solution[3], curr_solution[4], curr_solution[5], best_solution_local[3], best_solution_local[4], best_solution_local[5]):
+				convergence_counter += 1
+			if distance_structural_prev == ds and distance_GC_prev == dGC and distance_seq_prev == dseq:
+				convergence_counter += 1
+
+			if best_solution[3] == self.params.objective_to_target_distance:
+				if best_solution[4] == 0.0:
+					if best_solution[5] == 0.0:
+						break
+				ant_no = ant_no + 1
+				convergence_counter -= 1
+			else:
+				ant_no = 1
+
+			if ant_no == self.params.antsTerConv or resets >= self.params.Resets or global_ant_count >= 100000 or best_solution_since == 5:
+				break
+
+			# RESET
+			if ant_no < self.params.antsTerConv and convergence_counter >= self.params.ConvergenceCount:
+
+				initTerrain(self.params)
+				applyTerrainModification(self.params)
+				criterion = False
+				met = True  
+				ant_no = 1
+				prev_res = 0
+				sequence = ""
+				curr_structure = ""
+				counter = 0
+				Dscore = 100000
+				ds = 10000
+				dGC = 10000
+				dseq = 10000
+				best_solution_local = (sequence, curr_structure, Dscore, ds, dGC, dseq)
+
+				convergence_counter = 0
+
+				if resets == 0:
+					sentinel_solution = best_solution
+					best_solution_since += 1
+				else:
+					if best_solution[2] < sentinel_solution[2]:
+						sentinel_solution = best_solution
+						best_solution_since = 0
+					else:
+						best_solution_since += 1
+
+				resets += 1
+			
+			used_time = getUsedTime(start_time)
+			
+		duration  = used_time
+
+		self.result_stats += "|Ants:" + str(global_ant_count)
+		self.result_stats += "|Resets:" + str(resets) + "/" + str(self.params.Resets)
+		self.result_stats += "|AntsTC:" + str(self.params.antsTerConv) 
+		self.result_stats += "|CC:" + str(self.params.ConvergenceCount) 
+		self.result_stats += "|IP:" + str(self.params.improve_procedure) 
+		self.result_stats += "|BSS:" + str(best_solution_since)
+		self.result_stats += "|LP:" + str(len(self.params.LP))
+		self.result_stats += "|ds:" + str(getStructuralDistance(self.params, sequence, RNAfold, RNAfold_pattern))
+		self.result_stats += "|dGC:" + str(best_solution[4])
+		self.result_stats += "|GC:" + str(getGC(sequence)*100)
+		self.result_stats += "|dseq:" + str(getSequenceEditDistance(self.params.Cseq, sequence))
+		self.result_stats += "|L:" + str(len(sequence))
+		self.result_stats += "|Time:" + str(duration)
+
+		self.result_sequence = best_solution[0]
+		self.result_structure = best_solution[1]		
+
+		# CLOSING THE PIPES TO THE PROGRAMS
+		if (RNAfold is not None) :
+			RNAfold.communicate()
+
+
 	
 	def findSequence(self):
 		"""
@@ -1586,7 +1588,7 @@ class AntHill:
 		
 		print_to_STDOUT = (self.params.output_file == "STDOUT")
 
-		if self.params.return_PY == False:
+		if self.params.py == False:
 			if print_to_STDOUT == False:
 				outfolder = '/'.join(self.params.output_file.strip().split("/")[:-1])
 				curr_dir = os.getcwd()
@@ -1609,8 +1611,6 @@ class AntHill:
 		else: ## allowing the GU basepair
 			self.params.IUPAC_reverseComplements = {"A":"U", "C":"G", "G":"UC", "U":"AG", "R":"UC", "Y":"AG", "S":"UGC", "W":"UAG","K":"UCAG", "M":"UG", "B":"AGCU", "D":"AGCU", "H":"UGA", "V":"UGC", "N":"ACGU"}         
 		
-		result = []
-
 		for col in xrange(self.params.noOfColonies):
 			# Checking the kind of taget GC value should be used
 			self.params.GC = []
@@ -1620,10 +1620,10 @@ class AntHill:
 				self.params.GC = self.params.tGC
 
 			# Actual execution of a ant colony procesdure
-			output_v, output_w  =  runColony(self.params)
+			swarm()
 
 			# Post-Processing the output of a ant colony procedure
-			line = ">" + self.params.name + "#" + str(col)
+			self.tmp_result = ">" + self.params.name + "#" + str(col)
 			if self.params.output_verbose:
 				
 				GC_out = ""
@@ -1632,22 +1632,19 @@ class AntHill:
 					GC_out += str(s1) + "-" + str(s2) + ">" + str(v) + ";"
 				GC_out = GC_out[:-1]
 				
-				line += "|Cstr:" + self.params.Cstr + "|Cseq:" + self.params.Cseq + "|Alpha:" + str(self.params.alpha) + "|Beta:" + str(self.params.beta) + "|tGC:" + str(GC_out) + "|ER:" + str(self.params.ER) + "|Struct_CT:" + str(self.params.Cstrweight) + "|GC_CT:" + str(self.params.Cgcweight) + "|Seq_CT:" + str(self.params.Cseqweight) + output_v + "\n" + "\n".join(output_w)  
+				self.tmp_result += "|Cstr:" + self.params.Cstr + "|Cseq:" + self.params.Cseq + "|Alpha:" + str(self.params.alpha) + "|Beta:" + str(self.params.beta) + "|tGC:" + str(GC_out) + "|ER:" + str(self.params.ER) + "|Struct_CT:" + str(self.params.Cstrweight) + "|GC_CT:" + str(self.params.Cgcweight) + "|Seq_CT:" + str(self.params.Cseqweight) + self.tmp_stats + "\n" + self.tmp_sequence "\n" + self.tmp_structure + "\n"
 			else:
-				line += "\n" + output_w[0]
-			if self.params.return_PY == False:
+				self.tmp_result += "\n" + self.result[0]
+			if self.params.py == False:
 				if print_to_STDOUT:
-					print line
+					print self.tmp_result
 				else:
 					if col == 0:
-						print2file(self.params.output_file, line, 'w')
+						print2file(self.params.output_file, self.tmp_result, 'w')
 					else:
-						print2file(self.params.output_file, line, 'a')
+						print2file(self.params.output_file, self.tmp_result, 'a')
 			else:
-				result.append(line)
-
-		if self.params.return_PY == True:
-			return result
+				self.result.append(self.tmp_result)
 		if print_to_STDOUT == False:    
 			os.chdir(curr_dir)
   
@@ -1674,7 +1671,7 @@ class AntaRNAVariables:
 		self.strategy = "A"
 		self.noOfColonies = 1
 		self.output_file = "STDOUT"
-		self.return_PY = False
+		self.py = True
 		self.name="antaRNA"
 		self.verbose = False 
 		self.output_verbose = False
@@ -1711,7 +1708,7 @@ class AntaRNAVariables:
 		self.strategy = args.strategy
 		self.noOfColonies = args.noOfColonies
 		self.output_file = args.output_file
-		self.return_PY = args.return_PY
+		self.py = args.py
 		self.name = args.name
 		self.verbose = args .verbose
 		self.output_verbose = args.output_verbose
@@ -1847,6 +1844,11 @@ class AntaRNAVariables:
 
 
 	
+	##########################
+	# PROGRAM PRESENCE CHECK
+	##########################
+
+
 
 	def checkForViennaTools(self):
 		"""
