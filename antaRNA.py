@@ -1120,14 +1120,7 @@ def runColony(args):
 	"""
 		Execution function of a single ant colony finding one solution sequence
 	"""
-	
-	# Constraint Checks prior to execution
-	checkSimilarLength(args.Cstr, args.Cseq)
-	isValidStructure(args.Cstr)
-	checkSequenceConstraint(args.Cseq)
-	
-	args.BPstack , args.LP = getBPStack(args)
-	checkConstaintCompatibility(args)
+
 
 	retString = ""
 	retString2 = []
@@ -1621,10 +1614,10 @@ def exe():
 	
 	argparse_arguments = argument_parser.parse_args()
 
-	antaRNA_variables = AntaRNAVariables()
+	antaRNA_variables = Variables()
 	antaRNA_variables.readArgParseArguments(argparse_arguments)
 	
-	antaRNA_variables.varCheck()
+	antaRNA_variables.check()
 	findSequence(antaRNA_variables)
 
 	
@@ -1639,7 +1632,7 @@ def exe():
 #########################
 
 
-class AntaRNAVariables:
+class Variables:
 	"""
 		antaRNA Variables management.
 	"""
@@ -1717,7 +1710,7 @@ class AntaRNAVariables:
 		self.omega = args.omega
 		self.time = args.time
 
-	def varCheck(self):
+	def check(self):
 		"""
 			CHECK THE COMMAND LINE STUFF
 		"""
@@ -1767,6 +1760,8 @@ class AntaRNAVariables:
 			else:
 				print " Please choose a suitable pseudoknot predictor: [pKiss|Hotknots|IPKnot]"
 				exit(1)
+				
+				
 	def reachableGC(self):
 		"""
 			Checks if a demanded GC target content is reachable in dependence with the given sequence constraint.
@@ -1833,7 +1828,6 @@ class AntaRNAVariables:
 				exit (1)
 
 
-	
 
 	def checkForViennaTools(self):
 		"""
