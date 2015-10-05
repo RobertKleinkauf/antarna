@@ -1350,7 +1350,7 @@ class AntHill:
 	
 	def __init__(self):
 	
-		self.params = AntaRNAVariables()
+		self.params = Variables()
 		self.tmp_sequence = ""
 		self.tmp_structure = ""
 		self.tmp_stats = []
