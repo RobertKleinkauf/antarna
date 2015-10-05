@@ -1370,8 +1370,8 @@ class AntHill:
 		self.params = AntaRNAVariables()
 		self.tmp_sequence = ""
 		self.tmp_structure = ""
-		self.tmp_stats = ""
-		self.tmp_result = ""
+		self.tmp_stats = []
+		self.tmp_result = []
 		self.result = []
 		
 		
@@ -1555,22 +1555,22 @@ class AntHill:
 			
 		duration  = used_time
 
-		self.result_stats += "|Ants:" + str(global_ant_count)
-		self.result_stats += "|Resets:" + str(resets) + "/" + str(self.params.Resets)
-		self.result_stats += "|AntsTC:" + str(self.params.antsTerConv) 
-		self.result_stats += "|CC:" + str(self.params.ConvergenceCount) 
-		self.result_stats += "|IP:" + str(self.params.improve_procedure) 
-		self.result_stats += "|BSS:" + str(best_solution_since)
-		self.result_stats += "|LP:" + str(len(self.params.LP))
-		self.result_stats += "|ds:" + str(getStructuralDistance(self.params, sequence, RNAfold, RNAfold_pattern))
-		self.result_stats += "|dGC:" + str(best_solution[4])
-		self.result_stats += "|GC:" + str(getGC(sequence)*100)
-		self.result_stats += "|dseq:" + str(getSequenceEditDistance(self.params.Cseq, sequence))
-		self.result_stats += "|L:" + str(len(sequence))
-		self.result_stats += "|Time:" + str(duration)
+		self.tmp_stats.append("Ants:" + str(global_ant_count))
+		self.tmp_stats.append("Resets:" + str(resets) + "/" + str(self.params.Resets))
+		self.tmp_stats.append("AntsTC:" + str(self.params.antsTerConv))
+		self.tmp_stats.append("CC:" + str(self.params.ConvergenceCount)) 
+		self.tmp_stats.append("IP:" + str(self.params.improve_procedure)) 
+		self.tmp_stats.append("BSS:" + str(best_solution_since))
+		self.tmp_stats.append("LP:" + str(len(self.params.LP)))
+		self.tmp_stats.append("ds:" + str(getStructuralDistance(self.params, sequence, RNAfold, RNAfold_pattern)))
+		self.tmp_stats.append("dGC:" + str(best_solution[4]))
+		self.tmp_stats.append("GC:" + str(getGC(sequence)*100))
+		self.tmp_stats.append("dseq:" + str(getSequenceEditDistance(self.params.Cseq, sequence)))
+		self.tmp_stats.append("L:" + str(len(sequence)))
+		self.tmp_stats.append("Time:" + str(duration))
 
-		self.result_sequence = best_solution[0]
-		self.result_structure = best_solution[1]		
+		self.tmp_sequence = best_solution[0]
+		self.tmp_structure = best_solution[1]		
 
 		# CLOSING THE PIPES TO THE PROGRAMS
 		if (RNAfold is not None) :
@@ -1620,10 +1620,10 @@ class AntHill:
 				self.params.GC = self.params.tGC
 
 			# Actual execution of a ant colony procesdure
-			swarm()
+			self.swarm()
 
 			# Post-Processing the output of a ant colony procedure
-			self.tmp_result = ">" + self.params.name + "#" + str(col)
+			self.tmp_result = [">" + self.params.name + "#" + str(col)]
 			if self.params.output_verbose:
 				
 				GC_out = ""
@@ -1632,19 +1632,47 @@ class AntHill:
 					GC_out += str(s1) + "-" + str(s2) + ">" + str(v) + ";"
 				GC_out = GC_out[:-1]
 				
-				self.tmp_result += "|Cstr:" + self.params.Cstr + "|Cseq:" + self.params.Cseq + "|Alpha:" + str(self.params.alpha) + "|Beta:" + str(self.params.beta) + "|tGC:" + str(GC_out) + "|ER:" + str(self.params.ER) + "|Struct_CT:" + str(self.params.Cstrweight) + "|GC_CT:" + str(self.params.Cgcweight) + "|Seq_CT:" + str(self.params.Cseqweight) + self.tmp_stats + "\n" + self.tmp_sequence "\n" + self.tmp_structure + "\n"
+				self.tmp_result.append("Cstr:" + self.params.Cstr)
+				self.tmp_result.append("Cseq:" + self.params.Cseq)
+				self.tmp_result.append("Alpha:" + str(self.params.alpha))
+				self.tmp_result.append("Beta:" + str(self.params.beta))
+				self.tmp_result.append("tGC:" + str(GC_out))
+				self.tmp_result.append("ER:" + str(self.params.ER))
+				self.tmp_result.append("Struct_CT:" + str(self.params.Cstrweight))
+				self.tmp_result.append("GC_CT:" + str(self.params.Cgcweight))
+				self.tmp_result.append("Seq_CT:" + str(self.params.Cseqweight))
+				self.tmp_result.append("UsedProgram:" + self.params.usedProgram)
+				self.tmp_result.extend(self.tmp_stats)
+				
+				self.tmp_result.append("Rseq:" + self.tmp_sequence)
+				self.tmp_result.append("Rstr:" + self.tmp_structure)
+				
+				
+				
 			else:
-				self.tmp_result += "\n" + self.result[0]
+				self.tmp_result.append("Rseq:" + self.tmp_sequence)
+				
+				
 			if self.params.py == False:
 				if print_to_STDOUT:
-					print self.tmp_result
+					if len(self.tmp_result) > 2:
+						struct = self.tmp_result.pop()
+						seq = self.tmp_result.pop()
+						
+						print "|".join(self.tmp_result)
+						print seq
+						print struct
+					else:
+						for i, entry in enumerate(self.tmp_result):
+							print entry.replace("Rseq:", "")
 				else:
 					if col == 0:
-						print2file(self.params.output_file, self.tmp_result, 'w')
+						print2file(self.params.output_file, "\n".join(self.tmp_result), 'w')
 					else:
-						print2file(self.params.output_file, self.tmp_result, 'a')
+						print2file(self.params.output_file, "\n".join(self.tmp_result), 'a')
 			else:
-				self.result.append(self.tmp_result)
+
+				self.result.append(tuple(self.tmp_result))
 		if print_to_STDOUT == False:    
 			os.chdir(curr_dir)
   
@@ -1665,6 +1693,7 @@ class AntaRNAVariables:
 		self.noGUBasePair = False
 		self.noLBPmanagement = True
 		self.pseudoknots = False
+		self.usedProgram = "RNAfold"
 		self.pkprogram = "pKiss"
 		self.pkparameter = False
 		self.HotKnots_PATH = ""
@@ -1738,6 +1767,7 @@ class AntaRNAVariables:
 		self.parse_GC_management()
 
 		self.checkForViennaTools()
+		self.usedProgram = "RNAfold"
 		if self.pseudoknots:
 			if self.pkprogram == "pKiss":
 				self.checkForpKiss()
@@ -1750,7 +1780,7 @@ class AntaRNAVariables:
 					self.Cseqweight = 0.5 
 					self.Cseqweight = 50 
 					self.ConvergenceCount = 100
-				
+					self.usedProgram = "pKiss"
 			elif self.pkprogram == "HotKnots" and self.HotKnots_PATH != "":
 				self.checkForHotKnots(args)
 				if self.pkparameter == True:
@@ -1762,7 +1792,7 @@ class AntaRNAVariables:
 					self.Cseqweight = 0.5 
 					self.Cseqweight = 50 
 					self.ConvergenceCount = 100
-				
+					self.usedProgram = "HotKnots"
 			elif self.pkprogram == "IPKnot":
 				self.checkForIPKnot()
 				if self.pkparameter == True:
@@ -1773,7 +1803,8 @@ class AntaRNAVariables:
 					self.Cgcweight = 1.0 
 					self.Cseqweight = 0.5 
 					self.Cseqweight = 50 
-					self.ConvergenceCount = 100	
+					self.ConvergenceCount = 100
+					self.usedProgram = "IPKnot"
 			else:
 				print " Please choose a suitable pseudoknot predictor: [pKiss|Hotknots|IPKnot]"
 				exit(1)
