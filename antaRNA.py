@@ -17,7 +17,83 @@ from argparse import RawTextHelpFormatter
 ##############################
 # ARGPARSE TYPES AND FUNCTIONS
 ##############################
+#############################
+# ARGPARSE TYPE DEFINITIONS
+#############################
 
+def GC(string):
+	#print ">"+string+"<"
+	m = re.match('^\s*(\d+\.\d+):?(\d+)?\s*?-?\s*?(\d+)?\s*?$', string)
+
+	if m is None:
+		print "'" + string + "' is not a valid input for tGC Expected forms like '0-5'."
+		exit(1)
+	tGC = float(m.group(1))
+
+	if m.group(2) and m.group(3):
+		
+		start = int(m.group(2))
+		end = int(m.group(3))
+		#print "tGC", tGC, "Start", start, "End", end
+		return (tGC, start, end)
+	else:
+		#print "tGC", tGC
+		return (tGC)
+	
+def AccuracyFeature(string):
+	m = re.match('^\s*([.()]*)\s*(\w+)\s*(\d+\.?\d+)\s*$', string)
+	if m is None:
+		print "'" + string + "' is not a valid AccuracyFeature input of type STRUCTURE STRING STRING/FLOAT"
+		exit(1)
+	s1 = m.group(1)
+	s2 = m.group(2)
+	s3 = float(m.group(3))
+	#print (s1, s2, s3)
+	return ( (s1, s2, s3) )
+	
+def AccessibilityFeature(string):
+	m = re.match('^\s*([.x]*)\s*(\w+)\s*(\d+\.?\d+)\s*$', string)
+	if m is None:
+		print "'" + string + "' is not a valid AccessibilityFeature input of type STRUCTURE STRING STRING/FLOAT"
+		exit(1)
+	s1 = m.group(1)
+	s2 = m.group(2)
+	s3 = float(m.group(3))
+	if len(s1.replace(".", "")) != len(s1.strip(".")):
+		print "defined accessibility", s1, "is not within one stretch! Please reconsider."
+		exit(1)
+
+	#print (s1, s2, s3)
+	return ( (s1, s2, s3) )
+	
+def DiffAccuracyFeature(string):
+	m = re.match('^\s*([.()]*)\s*(\w+)\s*(\d+\.?\d+)\s*(\w+)\s*(\d+\.?\d+)\s*$', string)
+	if m is None:
+		print "'" + string + "' is not a valid DiffAccuracyFeature input of type STRUCTURE STRING FLOAT STRING FLOAT"
+		exit(1)
+	s1 = m.group(1)
+	s2 = m.group(2)
+	s3 = float(m.group(3))
+	s4 = m.group(4)
+	s5 = float(m.group(5))
+	return ( (s1, s2, s3, s4, s5) )
+	
+def DiffAccessibilityFeature(string):
+	m = re.match('^\s*([.x]*)\s*(\w+)\s*(\d+\.?\d+)\s*(\w+)\s*(\d+\.?\d+)\s*$', string)
+	if m is None:
+		print "'" + string + "' is not a valid DiffAccessibilityFeature input of type STRUCTURE STRING FLOAT STRING FLOAT"
+		exit(1)
+	s1 = m.group(1)
+	s2 = m.group(2)
+	s3 = float(m.group(3))
+	s4 = m.group(4)
+	s5 = float(m.group(5))
+	
+	if len(s1.replace(".", "")) != len(s1.strip(".")):
+		print "defined diff_accessibility", s1, "is not within one stretch! Please reconsider."
+		exit(1)
+	return ( (s1, s2, s3, s4, s5) )
+	
 def parseGC(string):
 	"""
 		Argparse Type Function
