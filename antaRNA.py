@@ -1,4 +1,5 @@
 import numpy
+import RNA
 import sys
 import random
 import subprocess
@@ -17,9 +18,6 @@ from argparse import RawTextHelpFormatter
 ##############################
 # ARGPARSE TYPES AND FUNCTIONS
 ##############################
-#############################
-# ARGPARSE TYPE DEFINITIONS
-#############################
 
 def GC(string):
 	#print ">"+string+"<"
@@ -177,7 +175,290 @@ def isStructureCompatible(lp1, lp2 ,bp):
 		else:
 			x = bp[x] + 1
 	return x == lp2
+####################################
+### EXTENDED CONSTRAINT MANAGEMENT
+####################################
+def getBPPM(sequence, structure = "", bppm_cutoff = 0.00001):
+    """
+        Requires ViennaRNAtools Python module
+        Returns the base pair probability matrix using Vienna pf_fold, get_pr and free_pf_arrays functions.
+        returns upper triangular matrix, whose entries exceed a threshold
+    """
+    bppm = {}
+    
+    
+     #'--noPS', '-d 2', t, P
+     
+     
+     
+    if structure != "":
+        RNA.cvar.fold_constrained = 1
+    else:
+        RNA.cvar.fold_constrained = 0
+    #print "Before", structure
+    RNA.pf_fold(sequence, structure)
+    #print "After", structure
+    seq_len = len(sequence)+1
+    for i in xrange(1, seq_len):
+        for j in xrange(1, seq_len):
+            if i<j:
+                bpp = RNA.get_pr(i,j)
+                if bpp > bppm_cutoff:
+                    bppm[str(i) + "_" + str(j)] = bpp
+                else:
+                    bppm[str(i) + "_" + str(j)] = 0
+    RNA.free_pf_arrays()
+    #print bppm
+    #exit(1)
+    return bppm
+    
+    
+def getAccuracy(struct_stack, bppm):
+    """
+        Calculate average structuredness of given structure(stack) within bppm
+    """
+    acc = 0
+    for sq_i in struct_stack.keys():
+        v = str(sq_i) + "_" + str(struct_stack[sq_i])
+        if v in bppm:
+            acc += bppm[v]
+            #acc += math.pow(bppm[v], 2) / len(struct_stack)
+    return acc
 
+
+def getAccessibility(positions, l, bppm):
+    """
+        Calculate average unstructuredness of given positions within bppm of a sequence with length l
+    """
+    acc = 0
+    for sq_i in positions.keys():
+        #visits = 0
+        #vis = []
+        for i in xrange(1, sq_i ):
+            #visits += 1
+            #vis.append(i)
+            v = str(i) + "_" + str(sq_i)
+            if v in bppm:
+                if bppm[v] > 0:
+                    
+                    #val = math.pow(bppm[v], 2)
+                    val = bppm[v]
+                    acc += val
+        for i in xrange(sq_i + 1, l + 1):
+            #visits += 1
+            #vis.append(i)
+            v = str(sq_i) + "_" + str(i)
+            if v in bppm:
+                if bppm[v] > 0:
+                    #val = math.pow(bppm[v], 2)
+                    val = bppm[v]
+                    acc += val
+        #print "Visits", visits
+        #print vis
+   # print "used positions", len(positions)
+    return 1 -(acc/len(positions))
+
+
+def removePairedAndUndefined_From_bpstack(P, struct_stack):
+	"""
+		Produce stack for the calculation of accessibility
+	"""
+	tmp_struct_stack = {}
+	for i in struct_stack.keys():
+		if struct_stack[i] == i and P[i] == "x":
+			tmp_struct_stack[i + 1] = struct_stack[i] + 1
+	return tmp_struct_stack    
+    
+def removeUnpairedFrom_bpstack(struct_stack):
+	"""
+		Produce stack for the calculation of accuracy
+	"""
+	tmp_struct_stack = {}
+	for i in struct_stack.keys():
+		if struct_stack[i] > i:
+			tmp_struct_stack[i + 1] = struct_stack[i] + 1
+	return tmp_struct_stack
+    
+def getStructStacks(structure_queries):
+	"""
+		for each structure query, produce appropriate stack
+	"""
+	s_q = []
+	for ask_struct, constraint_system, type_of_measurement, optimi_arg in structure_queries:
+		if type_of_measurement == "accuracy":
+			s_q.append( (ask_struct, 
+						removeUnpairedFrom_bpstack(getbpStack(ask_struct)[0]), 
+						constraint_system, 
+						type_of_measurement, 
+						optimi_arg) )
+		elif type_of_measurement == "access":
+			s_q.append( (ask_struct, 
+						removePairedAndUndefined_From_bpstack(ask_struct , getbpStack(len(ask_struct) * ".") [0]), 
+						constraint_system, 
+						type_of_measurement, 
+						optimi_arg) )
+
+	return s_q
+    
+
+def getFeatureDistance(BPPMS, features):
+	"""
+		given a sequence, a strucutre constraint in dot_bracket notation and a list of sub strucutre elements, i.e.
+		haipins or recognition sites, the function will return the FeatureDistance, which represents how good the 
+		sequence can perform the requested features.
+	"""
+	#BPPM, C_BPPM = BPPMS
+	tmp_features = []
+
+	# GOING THROUGH THE SPECIFIED FEATURES. CALCULATING THE SUITED MEASURE UNDER THE INFLUENCE OF A CERTAIN CONSTRAINT SITUATION
+	for ask_struct, ask_struct_stack, constraint_system, type_of_measurement, optimi_arg in features:
+		
+		if constraint_system == "UC":
+			
+			if type_of_measurement == "accuracy":
+				tmp_features.append( (ask_struct, 
+									constraint_system, 
+									type_of_measurement, 
+									optimi_arg, 
+									getAccuracy(ask_struct_stack, BPPMS[0])) )
+			elif type_of_measurement == "access":
+				tmp_features.append( (ask_struct, 
+									constraint_system, 
+									type_of_measurement, 
+									optimi_arg, 
+									getAccessibility(ask_struct_stack,len(ask_struct), BPPM[0])) )    
+				
+		elif constraint_system == "C":
+			
+			if type_of_measurement == "accuracy":
+				tmp_features.append( (ask_struct, 
+									constraint_system, 
+									type_of_measurement, 
+									optimi_arg, 
+									getAccuracy(ask_struct_stack, BPPMS[1])) )
+			elif type_of_measurement == "access":
+				tmp_features.append( (ask_struct, 
+									constraint_system, 
+									type_of_measurement, 
+									optimi_arg, 
+									getAccessibility(ask_struct_stack,len(ask_struct), BPPMS[1])) )     
+
+
+	# DERIVING THE FEATURE DISTANCE DEPENDENT ON THE CALULATED VALUE AND SPECIFIED OPTIMIZATION CRITERION
+	feature_distance = 0
+	for ask_struct, constraint_system, type_of_measurement, optimi_arg, value in tmp_features:
+		print ask_struct, constraint_system, type_of_measurement, optimi_arg, value
+		if optimi_arg == "min":
+			feature_distance += value
+		elif optimi_arg == "max":
+			feature_distance += 1 - value
+	feature_distance /= float(len(tmp_features))  
+
+	return feature_distance
+
+	
+	
+def checkRequests(Cstr_aptamer, Cstr, tGCs, measurables):
+	"""
+		Checking the constraints made in the input file.
+	
+	"""
+	Cstr_aptamer
+	Cstr
+	tGCs
+	measurables
+	
+	# length check
+	L = len(Cstr["Cstr_UB"])
+	if Cstr_aptamer != "":
+		if L != len(Cstr_aptamer):
+			print "Error: Length difference in the systems detected"
+			return False
+	if "Cstr_B" in Cstr:
+		if L != len(Cstr["Cstr_B"]):
+			print "Error: Length difference in the systems detected"
+			return False
+	for tgc in tGCs:
+		if L != len(tgc):
+			print "Error: Length difference in the systems detected"
+			return False
+	for m in measurables:
+		if L != len(m[0]):
+			print "Error: Length difference in the systems detected"
+			return False
+			
+	# GC area compatibility and completeness
+	GC = {}
+	for tgc in tGCs:
+		test_stack = removePairedAndUndefined_From_bpstack(tgc , getbpStack(len(tgc) * ".") [0])
+		for i in test_stack:
+			if i not in GC:
+				GC[i] = i
+			else:
+				print "Error: Overlapping GC definition areas."
+				return False
+	if L != len(GC):
+		print "Error:GC definition coverage is not complete."
+		return False
+		
+	return True
+			
+def extractRequests(data):
+	"""
+		Parsing the constraints made in the input file.
+	"""
+	Cstr_aptamer = "" # constraint structure for the induced folding situation of aptamers
+	Cstr = {} # list of structures which should be present in the end a.k.a. the actually wanted structures
+	measurables = []
+	tGCs = {}
+	for i, line in enumerate(data):
+		line = line.strip("\n").split(" ")
+		if line[1] == "Cstr_UB": # LABEL Cstr_UB: stretch of structure, label
+			#print "Cstr_UB"
+			try:
+				Cstr["Cstr_UB"] = line[0]
+			except:
+				print "Parsing of a Cstr_UB failed."
+				print line
+				exit(1)
+				
+		elif line[1] == "Cstr_B": # LABEL Cstr_B: stretch of structure, label
+			#print "Cstr_B"
+			try:
+				Cstr["Cstr_B"] = line[0]
+			except:
+				print "Parsing of a Cstr_B failed."
+				print line
+				exit(1)
+			
+		elif line[1] == "access" or line[1] == "accuracy": # LABEL access or accuracy: stretch of structure, label, constraint system, optimization type
+			#print "access/accuracy"
+			try:
+				measurables.append( (line[0], line[2], line[1], line[3]) )
+			except:
+				print "Parsing of an accuracy or accessibility measurable failed."
+				print line
+				exit(1)
+
+		elif line[1] == "Cstr_A": # LABEL Cstr_A: stretch of structure of the aptamer constraint system, label
+			#print "Cstr_A"
+			try:
+				Cstr_aptamer = line[0]
+			except:
+				print "Parsing of an aptamer structure failed."
+				print line
+				exit(1)
+				
+		elif line[1] == "tGC": # LABEL tGC: stretch of structure, label, value
+			#print "tGC"
+			try:
+				tGCs[line[0]] = float(line[2])
+			except:
+				print "Parsing of a tGC definition failed."
+				print line
+				exit(1)
+
+	return Cstr_aptamer, Cstr, tGCs, measurables
 ############################################
 # IUPAC LOADINGS AND NUCLEOTIDE MANAGEMENT
 ############################################
@@ -363,42 +644,96 @@ def maprange( a, b, s):
   (a1, a2), (b1, b2) = a, b
   return  b1 + ((s - a1) * (b2 - b1) / (a2 - a1))
 
-def getConstraint(TE, args):
+def getConstraint(terrain_element, args):
 	"""
-	Dependend on the situation in the constraint an the respective path section, setting wether a specific constraint can be given or not (for that path section)
+	Dependend on the situation in the constraint an the respective sequence section, setting wether a specific constraint can be given or not (for that sequence section)
 	"""
-	# TE :: transition element / path section under dispute
+	# terrain_element :: transition element / sequence section under dispute
 	# id1 :: id of the position of the caharacter to which the transition is leading to
 	# id2 :: id of the position of the character, which is listed in the BPinformation, it can be id1 as well, when no bp is present
 	# val :: BPstack information of the specific position
 	# constr1 :: constraining character of pos id1
 	# constr2 :: constraining character of pos id2
+	
+	id1 = int(terrain_element.split(".")[0])
+	
+	targetNucleotide = terrain_element.split(".")[1][-1:] # where the edge is leading to
 
-	id1 = int(TE.split(".")[0])
-	val = args.BPstack[id1] # check out the value of the destination character in the basepair/constraint stack
-	constr1 = val[0] # getting the constraint character of position id1
-	id2 = int(val[1][0]) # getting position id2
-	constr2 = val[1][1] # getting the sequence constraint for position id2
-	targetNucleotide = TE.split(".")[1][-1:] # where the edge is leading to
 	
-	lowerCase = constr1.islower()
+	if args.modus == "MFE":
 	
-	if lowerCase:
-		return 1
-	else:
-		c1 = set(args.IUPAC[constr1.upper()]) # getting all explicit symbols of c1
-		c2 = set(args.IUPAC_reverseComplements[constr2.upper()]) # getting the reverse complement explicit symbols of c2
+		val = args.BPstack[id1] # check out the value of the destination character in the basepair/constraint stack
+		constr1 = val[0] # getting the constraint character of position id1
+		id2 = int(val[1][0]) # getting position id2
+		constr2 = val[1][1] # getting the sequence constraint for position id2
 		
-		if targetNucleotide in c1:
-			if id1 == id2:
+		
+		lowerCase = constr1.islower()
+		
+		if lowerCase:
+			return 1
+		else:
+			c1 = set(args.IUPAC[constr1.upper()]) # getting all explicit symbols of c1
+			c2 = set(args.IUPAC_reverseComplements[constr2.upper()]) # getting the reverse complement explicit symbols of c2
+			
+			if targetNucleotide in c1:
+				if id1 == id2:
+					return 1
+				else:
+					if targetNucleotide in c2:
+						return 1
+					else:
+						return 0
+			else:
+				return 0
+				
+	if args.modus == "DP":
+		
+		# get set of allowed nucleotides in position i
+		
+		# get set of all constraints to po
+		#print args.interconnections
+		
+		id1 += 1 # the interconnections are 1 based
+		if id1 in args.interconnections: # nuc at pos id1 has some requested interaction
+			#print id1, "In interconnections", args.interconnections[id1]
+			constr1 = args.Cseq[id1-1]
+			if constr1.islower():
 				return 1
 			else:
-				if targetNucleotide in c2:
+				check = ""
+				c1 = args.interconnections[id1][0]
+				#print c1
+				if targetNucleotide in c1:
+					#print targetNucleotide, "in C1"
+					for i in xrange(1,len(args.interconnections[id1])):
+						
+						
+						c2 = "".join(set("".join([args.IUPAC_reverseComplements[i] for i in args.interconnections[id1][i][1].upper()])))
+						
+						#print targetNucleotide, "c2",c2
+						if targetNucleotide not in c2:
+							#print 0
+							return 0
+					#print 1
+					return 1
+					
+				else:
+					return 0
+				
+		else: # case of no base pair
+			
+			constr1 = args.Cseq[id1-1]
+			
+			#print id1, constr1
+			if constr1.islower():
+				return 1
+			else:
+				c1 = args.IUPAC[constr1.upper()]
+				if targetNucleotide in c1:
 					return 1
 				else:
 					return 0
-		else:
-			return 0
 
 def initTerrain(args): 
 	"""
@@ -534,7 +869,7 @@ def pickStep(tmp_steps, summe):
 			if mainval > rand: # as soon, as the mainval gets larger than the random value the assignment is done
 				return label
 
-def getPath(args):
+def getSequence(args):
 	"""
 		Performs a walk through the terrain and assembles a sequence, while respecting the structure constraint and IUPAC base complementarity
 		of the base pairs GU, GC and AT
@@ -542,53 +877,113 @@ def getPath(args):
 	nt = ["A","C","G","U"]
 	prev_edge = "00.XY"
 	sequence = ""
-	while len(sequence) <  len(args.Cstr):
+	
+	#print 
+	#exit(1)
+	while len(sequence) < args.length:
+		##print len(sequence) , len(args.Cstr)
 		coming_from = sequence[-1:]
 		summe = 0
 		steps = []
 		i = len(sequence)
 		allowed_nt = "ACGU"
 		# base pair closing case check, with subsequent delivery of a reduced allowed nt set
+		#print args.BP
+		#exit(1)
+		if i in args.BPstack:
+			#print i, args.BP
+			if i > args.BPstack[i][1][0]:
+				jump =  args.BPstack[i][1][0]
+				nuc_at_jump = sequence[jump]
+				allowed_nt = args.IUPAC_reverseComplements[nuc_at_jump]
+				#print args.BP[i][1][0], i, nuc_at_jump, "->", allowed_nt
+				
+			#allowed_nt = complementBase(nuc_at_jump)
 		
-		if i > args.BPstack[i][1][0]:
-			jump =  args.BPstack[i][1][0]
-			nuc_at_jump = sequence[jump]
-			allowed_nt = args.IUPAC_reverseComplements[nuc_at_jump]
+		#print args.interconnections
+		#exit(1)
+		if args.modus == "DP":
+			#print args.interconnections
+			#exit(1)
+			j = i+1
+			#print "Position", i,
+			if j in args.interconnections: # position is involved in a base pair interconnection
+				#print "->" , i+1, "in Interconnection"
+				Cseq_allowed_nt = ""
+				"""
+					allowed nucleotides, if current position is closing base pair position
+				"""
+				for partner in xrange(1, len(args.interconnections[j])):
+					jumpt_pos = args.interconnections[j][partner][0] -1
+					if jumpt_pos < j:
+						#print sequence, jumpt_pos, sequence[jumpt_pos], args.IUPAC_reverseComplements[sequence[jumpt_pos]]
+						Cseq_allowed_nt = args.IUPAC_reverseComplements[sequence[jumpt_pos]]
+						
+						
+						#Cseq_allowed_nt = "".join(set("".join([args.IUPAC_reverseComplements[i] for i in args.interconnections[j][partner][1].upper()])))
 
+				"""
+					allowed nucleiotides from sequence constraint with potential limitations form corresponding base constraints (open base pair)
+				"""
+				if Cseq_allowed_nt == "":
+					Cseq_allowed_nt = args.interconnections[j][0]
+				
+			else:
+				#print "Drawing sequence constraint from Cseq"
+				"""
+					allowed nucleiotides from sequence constraint
+				"""
+				Cseq_allowed_nt = args.IUPAC[args.Cseq[i]]
+			#print "Cseq_allowed_nt", Cseq_allowed_nt
+			allowed_nt = Cseq_allowed_nt
+			
+		#print "allowed_nt",allowed_nt
 		# Checking for every possible nt if it is suitable for the selection procedure
+		
 		for edge in args.terrain[prev_edge][-1]:
+			
 			if edge[-1:] in allowed_nt:
-				pheromone, PL , children = args.terrain[edge]
+				#print edge, 
+				pheromone, PL, children = args.terrain[edge]
 				value = ((float(pheromone * args.alpha)) + ((1/float(PL)) * args.beta))
 				summe += value
+				#print (value, edge)
 				steps.append((value, edge))
-		prev_edge = pickStep(steps, summe)
-		sequence += prev_edge[-1:]
+		#print ""
+		if len(steps) > 0:
+			prev_edge = pickStep(steps, summe)
+		#print "Selected Edge", prev_edge
+			sequence += prev_edge[-1:]
+		else:
+			print "No legal nucleotides to fill in here. Please check your sequence constraint!"
+			exit(1)
 		
+	#print sequence 
+	#exit(1)
 	return sequence
 	
-def getPathFromSelection(args, RNAfold, RNAfold_pattern):
+def getSequenceFromSelection(args, RNAfold, RNAfold_pattern):
 	"""
-		Returns the winning path from a selection of pathes...
+		Returns the winning sequence from a selection of sequences...
 	"""
-	win_path = 0
-	for i in xrange(args.ants_per_selection):
+	win_sequence = None
+	for i in xrange(args.ants_per_selection): # for k ants do:
 		# Generate Sequence
-		sequence = getPath(args)
+		sequence = getSequence(args)
 		# Measure sequence features and transform them into singular distances
-		distance_structural = float(getStructuralDistance(args, sequence, RNAfold, RNAfold_pattern)) 
-		distance_GC = float(getGCDistance(args.GC, sequence))
-		distance_seq = float(getSequenceEditDistance(args.Cseq, sequence))
+		ds, structure = getStructuralDistance(args, sequence, RNAfold, RNAfold_pattern)
+		dGC = getGCDistance(sequence, args)
+		dseq = getSequenceEditDistance(args.Cseq, sequence)
 		# Calculate Distance Score
-		D = distance_structural + distance_GC + distance_seq
-      
+		D = ds + dGC + dseq
 		# SELECT THE BEST-OUT-OF-k-SOLUTIONS according to distance score
-		if i == 0:
-			win_path = (sequence, D, distance_structural, distance_GC, distance_seq)
+		if i == 0: # Initial Case
+			win_sequence = (sequence, structure, D, ds, dGC, dseq)
 		else:
-			if D < win_path[1]:
-				win_path = (sequence, D, distance_structural, distance_GC, distance_seq)
-	return win_path
+			if D < win_sequence[2]: # Challenge the Champion Case
+				win_sequence = (sequence, structure, D, ds, dGC, dseq)
+	#print win_sequence
+	return win_sequence
 	
 ################################
 # STRUCTURE PREDICTION METHODS
@@ -780,6 +1175,17 @@ def getBPDifferenceDistance(stack1, stack2):
 			d += 1
 	return d
 
+def getMaxTargetDeviation(targetValue):
+    """
+        Retruns the maximally obtainalble deviation of a taregtValue in correspondance with [0,1]
+    """
+    
+    if targetValue >= 0.5:
+        return targetValue
+    else:
+        return 1 - targetValue
+
+        
 def getStructuralDistance(args, sequence, RNAfold, RNAfold_pattern):
 	"""
 		Calculator for Structural Distance
@@ -787,90 +1193,192 @@ def getStructuralDistance(args, sequence, RNAfold, RNAfold_pattern):
 	# fold the current solution's sequence to obtain the structure
 	current_structure = ""
 	### Selection of specific folding mechanism
-	if args.pseudoknots:
-		if args.pkprogram == "pKiss":
-			current_structure = getPKStructure(sequence, args)
-		elif args.pkprogram == "HotKnots":
-			current_structure = getHKStructure(sequence, args)
-		elif args.pkprogram == "IPKnot":
-			current_structure = getIPKnotStructure(sequence)
-	else:
-		RNAfold_match = RNAfold_pattern.match(consult_RNAfold(sequence, RNAfold))
-		current_structure = RNAfold_match.group(1)
+	if args.modus == "MFE":
+		if args.pseudoknots:
+			if args.pkprogram == "pKiss":
+				current_structure = getPKStructure(sequence, args)
+			elif args.pkprogram == "HotKnots":
+				current_structure = getHKStructure(sequence, args)
+			elif args.pkprogram == "IPKnot":
+				current_structure = getIPKnotStructure(sequence)
+		else:
+			RNAfold_match = RNAfold_pattern.match(consult_RNAfold(sequence, RNAfold))
+			current_structure = RNAfold_match.group(1)
 
-	# generate the current structure's base-pair stack
-	bp = getbpStack(current_structure)[0]
-	
-	# deriving a working copy of the target structure# add case-dependend structural constraints in case of lonley basepairs formation
-	tmp_target_structure_bp = getbpStack(args.Cstr)[0]
-	
-	### LONELY BASE PAIR MANAGEMENT
-	# add case-dependend structural constraints in case of lonley basepairs formation
-	if args.noLBPmanagement:
-		for lp in args.LP:
-			if bp[lp] == args.LP[lp]: # if the base pair is within the current solution structure, re-add the basepair into the constraint structure.
-				tmp_target_structure_bp[lp] = args.LP[lp]
-				tmp_target_structure_bp[args.LP[lp]] = lp
-	###
-	### "ABCDEFGHIJKLMNOPQRSTUVWXYZ" -> HARD CONSTRAINT
-	### "abcdefghijklmnopqrstuvwxyz" -> SOFT CONSTRAINT
-	###
 
-	# FUZZY STRUCTURE CONSTRAINT MANAGEMENT - HARD CONSTRAINT
-	# check for all allowed hard implicit constraint block declarators
-	dsoftCstr = 0
-	for c in "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz":
-		occurances = []
-		for m in re.finditer(c, args.Cstr): # search for a declarator in the requested structure
-			occurances.append(m.start()) # save the corresponding index
-		# transform declarator into single stranded request
-		for i in occurances: 
-			tmp_target_structure_bp[i] = i
-		# infer a base pair within the block declarated positions, if the current structure provides it.
-		fuzzy_block_penalty = 1
-		for i in occurances:
-			for j in occurances:
-				if i < j:
-					if bp[i] == j:
-						fuzzy_block_penalty = 0 # if a base pair is present within a current fuzzy_block, no penalty is risen
-						tmp_target_structure_bp[i] = bp[i]
-						tmp_target_structure_bp[bp[i]] = i
-		if len(occurances) > 0:
-			if c.isupper():
-				dsoftCstr += fuzzy_block_penalty
+
+		# generate the current structure's base-pair stack
+		bp = getbpStack(current_structure)[0]
+	
+		# deriving a working copy of the target structure# add case-dependend structural constraints in case of lonley basepairs formation
+		tmp_target_structure_bp = getbpStack(args.Cstr)[0]
+	
+		### LONELY BASE PAIR MANAGEMENT
+		# add case-dependend structural constraints in case of lonley basepairs formation
+		if args.noLBPmanagement:
+			for lp in args.LP:
+				if bp[lp] == args.LP[lp]: # if the base pair is within the current solution structure, re-add the basepair into the constraint structure.
+					tmp_target_structure_bp[lp] = args.LP[lp]
+					tmp_target_structure_bp[args.LP[lp]] = lp
+		###
+		### "ABCDEFGHIJKLMNOPQRSTUVWXYZ" -> HARD CONSTRAINT
+		### "abcdefghijklmnopqrstuvwxyz" -> SOFT CONSTRAINT
+		###
+
+		# FUZZY STRUCTURE CONSTRAINT MANAGEMENT - HARD CONSTRAINT
+		# check for all allowed hard implicit constraint block declarators
+		dsoftCstr = 0
+		for c in "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz":
+			occurances = []
+			for m in re.finditer(c, args.Cstr): # search for a declarator in the requested structure
+				occurances.append(m.start()) # save the corresponding index
+			# transform declarator into single stranded request
+			for i in occurances: 
+				tmp_target_structure_bp[i] = i
+			# infer a base pair within the block declarated positions, if the current structure provides it.
+			fuzzy_block_penalty = 1
+			for i in occurances:
+				for j in occurances:
+					if i < j:
+						if bp[i] == j:
+							fuzzy_block_penalty = 0 # if a base pair is present within a current fuzzy_block, no penalty is risen
+							tmp_target_structure_bp[i] = bp[i]
+							tmp_target_structure_bp[bp[i]] = i
+			if len(occurances) > 0:
+				if c.isupper():
+					dsoftCstr += fuzzy_block_penalty
 			
-	# INDUCES STRUCTURE MANAGEMENT
-	# Checking Cseq influence and it's induced basepairs
-	IUPACinducers, tmp_Cseq = getInducingSequencePositions(args)
-	if len(args.Cseq.strip("N")) > 0:
-    #print "Processing Cseq influence"
-		# Iterate over all positions within the Base Pair stack
-		for i in args.BPstack: # Check for each base index i 
-			if i < bp[i]: # if the current index is samller that the affiliated in the basepair stack of the current solution
-				bp_j = bp[i] # Actual j index of the current solution
-				BP_j = args.BPstack[i][1][0] # j index of the requested structure
-				if (i != bp_j and i == BP_j and args.BPstack[i][0] in IUPACinducers ): # if i pairs with some other base in the current structure, and i is requested single stranded and the Sequence constraint is allowed to induce...
-					if (args.BPstack[bp_j][1][0] == bp_j and args.BPstack[bp_j][0] in IUPACinducers):# If position j is requested singlestranded and position j nucleotide can induce base pairs
-						#if isCompatible(bp[i][0], bp[i][1][1], IUPAC_compatibles): # If both nucleotides, i and j are actually compatible
-						tmp_target_structure_bp[i] = bp[i]
-						tmp_target_structure_bp[bp_j] = i
+		# INDUCES STRUCTURE MANAGEMENT
+		# Checking Cseq influence and it's induced basepairs
+		IUPACinducers, tmp_Cseq = getInducingSequencePositions(args)
+		if len(args.Cseq.strip("N")) > 0:
+		#print "Processing Cseq influence"
+			# Iterate over all positions within the Base Pair stack
+			for i in args.BPstack: # Check for each base index i 
+				if i < bp[i]: # if the current index is samller that the affiliated in the basepair stack of the current solution
+					bp_j = bp[i] # Actual j index of the current solution
+					BP_j = args.BPstack[i][1][0] # j index of the requested structure
+					if (i != bp_j and i == BP_j and args.BPstack[i][0] in IUPACinducers ): # if i pairs with some other base in the current structure, and i is requested single stranded and the Sequence constraint is allowed to induce...
+						if (args.BPstack[bp_j][1][0] == bp_j and args.BPstack[bp_j][0] in IUPACinducers):# If position j is requested singlestranded and position j nucleotide can induce base pairs
+							#if isCompatible(bp[i][0], bp[i][1][1], IUPAC_compatibles): # If both nucleotides, i and j are actually compatible
+							tmp_target_structure_bp[i] = bp[i]
+							tmp_target_structure_bp[bp_j] = i
 						
-	dsreg = getBPDifferenceDistance(tmp_target_structure_bp, bp)
+		dsreg = getBPDifferenceDistance(tmp_target_structure_bp, bp)
 		
-	# CHECK FOR ALL DETERMINED LONELY BASE PAIRS (i<j), if they are formed
-	failLP = 0
-	if args.noLBPmanagement:
-		for lp in args.LP: 
-			if bp[lp] != args.LP[lp]: 
-				isComp = isCompatible(sequence[lp],sequence[args.LP[lp]], args.IUPAC_compatibles)
-				isStru = isStructureCompatible(lp, args.LP[lp] ,bp)
-				if not ( isStru and isStru ): # check if the bases at the specific positions are compatible and check if the 
-					# basepair can be formed according to pseudoknot free restriction. If one fails, a penalty distance is raised for that base pair
-					failLP += 1
+		# CHECK FOR ALL DETERMINED LONELY BASE PAIRS (i<j), if they are formed
+		failLP = 0
+		if args.noLBPmanagement:
+			for lp in args.LP: 
+				if bp[lp] != args.LP[lp]: 
+					isComp = isCompatible(sequence[lp],sequence[args.LP[lp]], args.IUPAC_compatibles)
+					isStru = isStructureCompatible(lp, args.LP[lp] ,bp)
+					if not ( isStru and isStru ): # check if the bases at the specific positions are compatible and check if the 
+						# basepair can be formed according to pseudoknot free restriction. If one fails, a penalty distance is raised for that base pair
+						failLP += 1
 
-	dsLP = float(failLP)
-	return (dsreg + dsLP + dsoftCstr) /float(len(tmp_target_structure_bp))
-  
+		dsLP = float(failLP)
+		return (dsreg + dsLP + dsoftCstr) /float(len(tmp_target_structure_bp)) * 100, current_structure
+		
+		
+	elif args.modus == "DP":
+		max_struct_deviation = 0
+		L = len(sequence)
+		DP = {}
+		
+		# Calculating the Dotplot for the unconstrained case
+		DP["UB"] = getBPPM(sequence)
+		
+		# Checking if some specific Cstr constraint was inputed, in case: calculate a constrained Dotplot
+		if args.Cstr is not None:
+			# making a copy of Cstr hackingstyle, such that the constraint is not overwritten by the getBPPM() function
+			tmp_struct = (args.Cstr + "x")[:-1]
+			# calculating the Dotplot for the constrained case
+			DP["B"] =  getBPPM(sequence, tmp_struct)
+		
+
+		
+		# Differential Accessibility Structural Feature
+		#print "DiffAccessibility:"
+		ddsf_access = 0
+		if "Diffaccess" in args:
+			for i in args.Diffaccess:
+				#print i
+				for c in i[0]:
+					tmp_c = {c:c}
+					# calculating the first deviation
+					access_1 = getAccessibility(tmp_c, L, DP[i[3]])
+					max_struct_deviation += getMaxTargetDeviation(i[4])
+					diff_1 = abs(access_1 - i[4])
+					# calculating the first deviation
+					access_2 = getAccessibility(tmp_c, L, DP[i[1]])
+					max_struct_deviation += getMaxTargetDeviation(i[2])
+					diff_2 = abs(access_2 - i[2])
+
+					ddsf_access += diff_1 + diff_2
+
+		
+		# Differential Accuracy Structural Feature
+		ddsf_diff_accur = 0
+		if "Diffaccur" in args:
+			for i in args.Diffaccur:
+				for c in i[0]:
+					tmp_c = {c:i[0][c]}
+					res = {}
+					# calculating the first deviation
+					accur_1 = getAccuracy(tmp_c, DP[i[3]])
+					max_struct_deviation += getMaxTargetDeviation(i[4])
+					diff_1 = abs(accur_1 - i[4])
+					# calculating the second deviation
+					accur_2 = getAccuracy(tmp_c, DP[i[1]])
+					max_struct_deviation += getMaxTargetDeviation(i[2])
+					diff_2 = abs(accur_2 - i[2])
+					
+					ddsf_diff_accur += diff_1 + diff_2
+
+		
+		
+		# Accessibility structural feature
+		dsf_access = 0
+		if "access" in args:
+			for i in args.access:
+				for c in i[0]:
+					tmp_c = {c:c}
+					# calculating the deviation
+					access_1 = abs(getAccessibility(tmp_c, L, DP[i[1]]))
+					max_struct_deviation += getMaxTargetDeviation(i[2])
+					diff_1 = abs(access_1 - i[2])
+					
+					dsf_access += diff_1
+		
+		# Accuracy structural feature
+		dsf_accur = 0
+		if "accur" in args:
+			for i in args.accur:
+				for c in i[0]:
+					tmp_c = {c:i[0][c]}
+					# calculating the deviation
+					accu_1 = getAccuracy(tmp_c, DP[i[1]])
+					max_struct_deviation += getMaxTargetDeviation(i[2])
+					diff_1 = abs(accu_1 - i[2])
+
+					dsf_accur += diff_1
+
+				
+				
+		ddsf = ddsf_diff_accur + ddsf_access
+		dsf = dsf_accur + dsf_access
+
+		d = (ddsf + dsf) / max_struct_deviation * 100
+		
+		
+		
+		print args
+		
+		exit(1)
+		return d , DP
+		
+		
 def getGC(sequence):
 	"""
 		Calculate GC content of a sequence
@@ -882,12 +1390,12 @@ def getGC(sequence):
 	GC = GC/float(len(sequence))
 	return GC
 	
-def getGCDistance(GC, sequence):
+def getGCDistance( sequence, args):
 	"""
 	Calculate the pseudo GC content distance 
 	"""
 	D = 0
-	for tGC in GC:
+	for tGC in args.GC:
 		v, s1, s2 = tGC # (tGC, start, stop)
 		tmp_seq = sequence[s1 : s2 + 1]
 		L = len(tmp_seq)
@@ -912,16 +1420,16 @@ def getGCDistance(GC, sequence):
 	return D
 	
 
-def getSequenceEditDistance(SC, path):
+def getSequenceEditDistance(Cseq, sequence):
 	"""
 	Calculate sequence edit distance of a solution to the constraint
 	"""
 	IUPAC = {"A":"A", "C":"C", "G":"G", "U":"U", "R":"AG", "Y":"CU", "S":"GC", "W":"AU","K":"GU", "M":"AC", "B":"CGU", "D":"AGU", "H":"ACU", "V":"ACG", "N":"ACGU"}         
 	edit = 0
-	for i in xrange(len(SC)):
-		if path[i] not in IUPAC[SC[i].upper()]:
+	for i in xrange(len(Cseq)):
+		if sequence[i] not in IUPAC[Cseq[i].upper()]:
 			edit += 1
-	return edit/float(len(path))
+	return edit/float(len(sequence))
 
 
 #########################
@@ -934,8 +1442,8 @@ def evaporate(args):
 	"""
 	c = 1
 	for key in args.terrain:
-		p,l,c = args.terrain[key]
-		p *= (1-args.ER)
+		p, l, c = args.terrain[key]
+		p *= (1 - args.ER)
 		args.terrain[key] = (p, l, c)
 		
 def trailBlaze(sequence, current_structure, ds, dgc, dseq, args):
@@ -949,19 +1457,133 @@ def trailBlaze(sequence, current_structure, ds, dgc, dseq, args):
 	d = bs + bGC + bSeq
 
 	transitions = getTransitions(sequence)
+	#print args
+	if args.modus == "MFE":
+		bpstack, LP = getbpStack(current_structure)
+		for trans in xrange(len(transitions)): # for each transition in the path
+			id1 = int(transitions[trans].split(".")[0])
+			tar_id2 = int(args.BPstack[id1][1][0]) # getting requested  position id2
+			curr_id2 = int(bpstack[id1]) # getting the current situation
+			multiplicator = 0
+			
+			if tar_id2 == curr_id2 and id1 != tar_id2 and id1 != curr_id2: # case of a base pair, having both brackets on the correct position
+				multiplicator = 1
+			elif tar_id2 == curr_id2 and id1 == tar_id2 and id1 == curr_id2: # case of a single stranded base in both structures
+				multiplicator = 1
+			p, l, c = args.terrain[transitions[trans]] # getting the pheromone and the length value of the single path transition
+			p +=  d * multiplicator
+			args.terrain[transitions[trans]] = (p, l, c) # updating the values wihtin the terrain's
+			
+	elif args.modus == "DP":
+		# IDEA: For each base (resp. its position) in the sequence, it needs 
+		# to be checked, if this certain position has been part of active 
+		# constraint. If so, bonify this segment of path but only if it has 
+		# performed well among all constraints posed to that position.
+		
+		# In addition, one could check, if the base is involved in a larger 
+		# interconnection complex. and bonify it only, if the whole complex is 
+		# satisfying within the dotplots.
+		T = transformTransitions(transitions)
+		#print args.PosFeatures
+		#exit(1)
+		
+		
+		"""
+			In this version, each position is dealt individually and to all its features listed from the input.
+		"""
 
-	for trans in xrange(len(transitions)): # for each transition in the path
-		id1 = int(transitions[trans].split(".")[0])
-		tar_id2 = int(args.BPstack[id1][1][0]) # getting requested  position id2
-		curr_id2 = int(bpstack[id1]) # getting the current situation
-		multiplicator = 0
-		if tar_id2 == curr_id2 and id1 != tar_id2 and id1 != curr_id2: # case of a base pair, having both brackets on the correct position
-			multiplicator = 1
-		elif tar_id2 == curr_id2 and id1 == tar_id2 and id1 == curr_id2: # case of a single stranded base in both structures
-			multiplicator = 1
-		p, l, c = args.terrain[transitions[trans]] # getting the pheromone and the length value of the single path transition
-		p +=  d * multiplicator
-		args.terrain[transitions[trans]] = (p, l, c) # updating the values wihtin the terrain's
+		for trans in transitions:
+			t_i = int(trans.split(".")[0])
+			i = t_i + 1
+
+			deviations = []
+
+			for DP in args.PosFeatures[i]:
+				#print DP
+				if len(args.PosFeatures[i][DP]) > 0:
+					
+					for k, feature in enumerate(args.PosFeatures[i][DP]):
+						#print k, feature
+						feature_type, j, value = feature
+						
+						if feature_type == "Accu":
+							tmp_stack = {i:j}
+							val = getAccuracy(tmp_stack, current_structure[DP])
+						elif feature_type == "Accs":
+							tmp_stack = {i:j}
+							val = getAccessibility(tmp_stack, len(args.Cseq), current_structure[DP])
+						deviations.append(abs(val - value))
+
+
+
+			if len(deviations) > 0:
+				if numpy.sum(deviations) <= 0.05:
+					"""
+						ALL EDGES y.xB GET PROMOTED DUE TO NUCLEOTIDE B in y.AB BEING PART OF A PARTIAL STRUCTURE...
+					"""
+					#print trans
+					no, trail = transitions[t_i].split(".")
+					nt = ["A", "C", "G", "U"]
+
+					if len(trail) > 1:
+						to_nt = trail[-1:]
+						edges = set([ no + "." + n + to_nt for n in nt])
+					else:
+						edges = set(transitions[t_i])
+
+					for edge in edges:
+						try:
+							p, l, c = args.Terrain[edge] # getting the pheromone and the length value of the single path transition
+							p +=  d * (1-abs(val - value)) * 100000
+							args.Terrain[transitions[t_i]] = (p, l, c)
+						except:
+							pass
+
+		
+		"""
+			JUST THE SPECIFIC EDGE y.AB IS ACTUALLY PROMOTED, where B was the important nucleotide present in y A in y-1
+		"""
+		#p, l, c = args.Terrain[transitions[t_i]] # getting the pheromone and the length value of the single path transition
+		#p +=  d * (1-abs(val - value))* 100
+		#args.Terrain[transitions[t_i]] = (p, l, c)
+
+
+		"""
+			If a complete interaction collection is performing well, the whole interconnection is highly benefitted
+		
+		"""
+		for interconnection in args.Interconnection_sets:
+			values = []
+			for i in list(interconnection):
+				trans =  str(i-1)+"."+T[str(i-1)]
+				for DP in args.PosFeatures[i]:
+					if len(args.PosFeatures[i][DP]) > 0:
+						for k, feature in enumerate(args.PosFeatures[i][DP]):
+							feature_type, j, value = feature
+							if feature_type == "Accu":
+								tmp_stack = {i:j}
+								val = getAccuracy(tmp_stack, current_structure[DP])
+								values.append(abs(val - value))
+							elif feature_type == "Accs":
+								tmp_stack = {i:j}
+								val = getAccessibility(tmp_stack, len(args.Cseq), current_structure[DP])
+								values.append(abs(val - value))
+			if len(values) > 0:
+				avrg_val = sum(values)/float(len(values))
+
+			else:
+				avrg_val = 1
+				
+			##print interconnection, avrg_val
+			#if  avrg_val <= 0.1:
+
+				
+				#for i in list(interconnection):
+					#trans =  str(i-1)+"."+T[str(i-1)]
+					#p, l, c = args.Terrain[trans] # getting the pheromone and the length value of the single path transition
+					#p +=  d * (1-avrg_val)*1000
+					#args.Terrain[trans] = (p, l, c)
+
 
 
 def getTransitions(p):
@@ -1089,16 +1711,76 @@ def exe():
 	
 	argument_parser.convert_arg_line_to_args = convert_arg_line_to_args
 	
-	constraints = argument_parser.add_argument_group('Constraint Variables', 'Use to define an RNA constraint system.')
-	constraints.add_argument("-Cstr", "--Cstr", 
+	subparsers = argument_parser.add_subparsers(help='\'MFE\' (minimum free energy) or \'DP\' (dotplot) mode selection', dest="subparser_name")
+	
+	### MFE PARSER
+	MFE_parser = subparsers.add_parser('MFE', help='MFE mode: compute an RNA sequence according to the mfe model of a structure. Required for the pseudoknot variant.')
+	MFE_parser.add_argument("-Cstr", "--Cstr", 
 								help="Structure constraint using RNA dotbracket notation with fuzzy block constraint. \n(TYPE: %(type)s)\n\n", 
 								type=str, 
 								required=True)
 								
+	pk = MFE_parser.add_argument_group('Pseudoknot Variables', 'Use in order to enable pseudoknot calculation. pKiss_mfe needs to be installed.')
+	pk.add_argument("-p", "--pseudoknots", 
+								help = "Switch to pseudoknot based prediction using pKiss. Check the pseudoknot parameter usage!!!\n\n", 
+								action="store_true")
+	
+	pk.add_argument("-pkPar", "--pkparameter", 
+								help = "Enable optimized parameters for the usage of pseudo knots (Further parameter input ignored).\n\n", 
+								action="store_true")
+	pk.add_argument("-pkP", "--pkprogram",
+								help = "Select a pseudoknot prediction program.\nIf HotKnots is used, please specify the bin folder of Hotknots with absolute path using HK_PATH argument.\n(DEFAULT: %(default)s, TYPE: %(type)s, Choice: [pKiss|HotKnots|IPKnot])\n\n",
+								type=str,
+								default="pKiss")
+	pk.add_argument("-HKPATH", "--HotKnots_PATH",
+								help = "Set HotKnots absolute path, like /path/to/HotKnots/bin.\nIf HotKnots is used, please specify the bin folder of Hotknots with absolute path using HK_PATH argument.\n(DEFAULT: %(default)s, TYPE: %(type)s\n\n",
+								type=str,
+								default="")
+	
+	pk.add_argument("--strategy", 
+								help = "Defining the pKiss folding strategy.\n(DEFAULT: %(default)s, TYPE: %(type)s)\n\n", 
+								type=str, 
+								default="A")
+	
+	### DP PARSER
+	DP_parser = subparsers.add_parser('DP', help='DP mode: compute an RNA sequence according to the dotplot(s) model.')
+	DP_parser.add_argument("-Cstr", "--Cstr", 
+								help="Structure constraint using RNA dotbracket notation. If specified, this structure will be used to constrain a folding hypothesis to produce a ligand bound model of the dotplot.\n(TYPE: %(type)s)\n\n", 
+								type=str,
+								default = None)
+	DP_parser.add_argument("--accuracy", 
+								help="Define an accuracy evaluation block.\n\n", 
+								type=AccuracyFeature,
+								default=None,
+								action='append'
+								)
+	DP_parser.add_argument("--accessibility", 
+								help="Define an accessibility evaluation block.\n\n", 
+								type=AccessibilityFeature,
+								default=None,
+								action='append'
+								)
+	DP_parser.add_argument("--Diff-accuracy", 
+								#help="Define an differential accuracy evaluation block.\n\n", 
+								type=DiffAccuracyFeature,
+								default=None,
+								action='append'
+								)
+	DP_parser.add_argument("--Diff-accessibility", 
+								help="Define an differential accessibility evaluation block.\n\n", 
+								type=DiffAccessibilityFeature,
+								default=None,
+								action='append'
+								)
+
+	### General Variables available in both modes
+	constraints = argument_parser.add_argument_group('Constraint Variables', 'Use to define an RNA constraint system.')
+
+								
 	constraints.add_argument("-Cseq", "--Cseq", 
 								help="Sequence constraint using RNA nucleotide alphabet {A,C,G,U} and wild-card \"N\". \n(TYPE: %(type)s)\n\n", 
 								type=str, 
-								default = "") 
+								default = None) 
 								
 	constraints.add_argument("-l", "--level", 
 								help="Sets the level of allowed influence of sequence constraint on the structure constraint [0:no influence; 3:extensive influence].\n(TYPE: %(type)s)\n\n", 
@@ -1140,30 +1822,6 @@ def exe():
 								action="store_false", 
 								default =True)
 
-	pk = argument_parser.add_argument_group('Pseudoknot Variables', 'Use in order to enable pseudoknot calculation. pKiss_mfe needs to be installed.')
-	pk.add_argument("-p", "--pseudoknots", 
-								help = "Switch to pseudoknot based prediction using pKiss. Check the pseudoknot parameter usage!!!\n\n", 
-								action="store_true")
-	
-	pk.add_argument("-pkP", "--pkprogram",
-								help = "Select a pseudoknot prediction program.\nIf HotKnots is used, please specify the bin folder of Hotknots with absolute path using HK_PATH argument.\n(DEFAULT: %(default)s, TYPE: %(type)s, Choice: [pKiss|HotKnots|IPKnot])\n\n",
-								type=str,
-								default="pKiss")
-	pk.add_argument("-pkPar", "--pkparameter", 
-								help = "Enable optimized parameters for the usage of pseudo knots (Further parameter input ignored).\n\n", 
-								action="store_true")	
-	
-	pk.add_argument("-HKPATH", "--HotKnots_PATH",
-								help = "Set HotKnots absolute path, like /path/to/HotKnots/bin.\nIf HotKnots is used, please specify the bin folder of Hotknots with absolute path using HK_PATH argument.\n(DEFAULT: %(default)s, TYPE: %(type)s\n\n",
-								type=str,
-								default="")
-
-	pk.add_argument("--strategy", 
-								help = "Defining the pKiss folding strategy.\n(DEFAULT: %(default)s, TYPE: %(type)s)\n\n", 
-								type=str, 
-								default="A")
-
-
 	output = argument_parser.add_argument_group('Output Variables', 'Tweak form and verbosity of output.')
 	output.add_argument("-n", "--noOfColonies", 
 								help="Number of sequences which shall be produced. \n(TYPE: %(type)s)\n\n", 
@@ -1191,14 +1849,19 @@ def exe():
 	output.add_argument("-ov", "--output_verbose", 
 								help="Prints additional features and stats to the headers of the produced sequences. Also adds the structure of the sequence.\n\n", 
 								action="store_true")
+	output.add_argument("--plot", 
+								help="Print comic terrain.\n\n", 
+								action="store_true")
 
-
+	
 
 	aco = argument_parser.add_argument_group('Ant Colony Variables', 'Alter the behavior of the ant colony optimization.')
 	aco.add_argument("-s", "--seed", 
 								help = "Provides a seed value for the used pseudo random number generator.\n(DEFAULT: %(default)s, TYPE: %(type)s)\n\n", 
 								type=str, 
-								default="none")
+								default=None)
+								
+
 								
 	aco.add_argument("-ip", "--improve_procedure", 
 								help = "Select the improving method.  h=hierarchical, s=score_based.\n(DEFAULT: %(default)s, TYPE: %(type)s)\n\n", 
@@ -1224,15 +1887,19 @@ def exe():
 								help = "Delimits the amount of internal ants for termination convergence criterion for a reset.\n(DEFAULT: %(default)s, TYPE: %(type)s)\n\n", 
 								type=int, 
 								default=50)
-	aco.add_argument("-a", "--alpha", 
+	aco.add_argument("--alpha", 
 								help="Sets alpha, probability weight for terrain pheromone influence. [0,1] \n(DEFAULT: %(default)s, TYPE: %(type)s)\n\n", 
 								type=float, 
 								default=1.0)
 	
-	aco.add_argument("-b", "--beta", 
+	aco.add_argument("--beta", 
 								help="Sets beta, probability weight for terrain path influence. [0,1]\n(DEFAULT: %(default)s, TYPE: %(type)s)\n\n", 
 								type=float, 
 								default=1.0)
+	aco.add_argument("--omega",
+								help="Sets the value, which is used in the mimiced 1/x evaluation function in order to set a crossing point on the y-axis.",
+								type=float,
+								default=2.23)
 	
 	aco.add_argument("-er", "--ER", 
 								help="Pheromone evaporation rate. \n(DEFAULT: %(default)s, TYPE: %(type)s)\n\n", 
@@ -1253,11 +1920,7 @@ def exe():
 								help="Sequence constraint quality weighting factor. [0,1]\n(DEFAULT: %(default)s, TYPE: %(type)s)\n\n\n", 
 								type=float, 
 								default=1.0)
-	
-	aco.add_argument("-o", "--omega", 
-								help="Scoring parameter\n(DEFAULT: %(default)s, TYPE: %(type)s)\n\n\n", 
-								type=float, 
-								default=2.23)
+
 
 	aco.add_argument("-t", "--time", 
 								help="Limiting runtime [seconds]\n(DEFAULT: %(default)s, TYPE: %(type)s)\n\n\n", 
@@ -1276,11 +1939,16 @@ def exe():
 	else:
 		print hill.params.error
 	
+	
+	
+
 
 
 #########################
 ### CLASSES
 #########################
+
+
 class AntHill:
 	"""
 		antaRNA AntHill. Can perform varoius actions! :)
@@ -1294,7 +1962,7 @@ class AntHill:
 		self.tmp_stats = []
 		self.tmp_result = []
 		self.result = []
-		self.error = ""
+
 		
 		
 	###################################################  
@@ -1323,7 +1991,6 @@ class AntHill:
 			criterion = False
 			met = True  
 			ant_no = 1
-			prev_res = 0
 			seq = ""
 
 			counter = 0
@@ -1334,15 +2001,15 @@ class AntHill:
 			convergence_counter = 0
 			
 			resets = 0
-			path = ""
-			curr_structure = ""
+			sequence = ""
+			current_structure = ""
 
 			Dscore = 100000
 			ds = 10000
 			dGC = 10000
 			dseq = 10000
-			best_solution = (path, curr_structure, Dscore, ds, dGC, dseq)
-			best_solution_local = (path, curr_structure, Dscore, ds, dGC, dseq)
+			best_solution = (sequence, current_structure, Dscore, ds, dGC, dseq)
+			best_solution_local = (sequence, current_structure, Dscore, ds, dGC, dseq)
 			
 			best_solution_since = 0
 			
@@ -1362,25 +2029,14 @@ class AntHill:
 				global_ant_count += 1
 				global_best_ants += 1
 
-				path_info = getPathFromSelection(self.params, RNAfold, RNAfold_pattern)
+				sequence_info = getSequenceFromSelection(self.params, RNAfold, RNAfold_pattern)
 
 				distance_structural_prev = ds
 				distance_GC_prev = dGC
 				distance_seq_prev = dseq
-
-				sequence, Dscore , ds, dGC, dseq = path_info
-				curr_structure = ""
-				if self.params.pseudoknots:
-					if self.params.pkprogram == "pKiss":
-						curr_structure = getPKStructure(sequence, self.params)
-					elif self.params.pkprogram == "HotKnots":
-						curr_structure = getHKStructure(sequence, self.params)
-					elif self.params.pkprogram == "IPKnot":
-						curr_structure = getIPKnotStructure(sequence)
-				else:
-					curr_structure = getRNAfoldStructure(sequence, RNAfold)
-					
-				curr_solution = (sequence, curr_structure, Dscore, ds, dGC, dseq)
+				sequence, current_structure, Dscore , ds, dGC, dseq = sequence_info
+				
+				curr_solution = (sequence, current_structure, Dscore, ds, dGC, dseq)
 				# BEST SOLUTION PICKING
 				if self.params.improve_procedure == "h": # hierarchical check
 					# for the global best solution
@@ -1406,12 +2062,12 @@ class AntHill:
 					print self.params.Cstr, " <- target struct" 
 					print best_solution[0] , " <- BS since ", str(best_solution_since), "Size of Terrrain:", len(self.params.terrain)
 					print best_solution[1] , " <- BS Dscore " + str(best_solution[2]) + " ds " + str(best_solution[3]) + " dGC " + str(best_solution[4]) + " dseq " + str(best_solution[5])+ " LP " + str(len(self.params.LP)) + " <- best solution stats"
-					print curr_structure, " <- CS"
+					print current_structure, " <- CS"
 					print sequence,
 					print " <- CS", "Dscore", str(Dscore), "ds", ds, "dGC", dGC, "GC", getGC(sequence)*100, "Dseq", dseq
 
 				#### UPDATING THE TERRAIN ACCORDING TO THE QUALITY OF THE CURRENT BESTO-OUT-OF-k SOLUTION
-				updateTerrain(sequence, curr_structure, ds, dGC, dseq, self.params) 
+				updateTerrain(sequence, current_structure, ds, dGC, dseq, self.params) 
 
 				if self.params.verbose: print "Used time for one iteration", time.time() - iteration_start
 					
@@ -1442,15 +2098,14 @@ class AntHill:
 					criterion = False
 					met = True  
 					ant_no = 1
-					prev_res = 0
 					sequence = ""
-					curr_structure = ""
+					current_structure = ""
 					counter = 0
 					Dscore = 100000
 					ds = 10000
 					dGC = 10000
 					dseq = 10000
-					best_solution_local = (sequence, curr_structure, Dscore, ds, dGC, dseq)
+					best_solution_local = (sequence, current_structure, Dscore, ds, dGC, dseq)
 
 					convergence_counter = 0
 
@@ -1458,7 +2113,7 @@ class AntHill:
 						sentinel_solution = best_solution
 						best_solution_since += 1
 					else:
-						if best_solution[2] < sentinel_solution[2]:
+						if best_solution[3] < sentinel_solution[3]:
 							sentinel_solution = best_solution
 							best_solution_since = 0
 						else:
@@ -1469,7 +2124,8 @@ class AntHill:
 				used_time = getUsedTime(start_time)
 				
 			duration  = used_time
-
+			self.tmp_sequence = best_solution[0]
+			self.tmp_structure = best_solution[1]	
 			self.tmp_stats.append("Ants:" + str(global_ant_count))
 			self.tmp_stats.append("Resets:" + str(resets) + "/" + str(self.params.Resets))
 			self.tmp_stats.append("AntsTC:" + str(self.params.antsTerConv))
@@ -1477,15 +2133,16 @@ class AntHill:
 			self.tmp_stats.append("IP:" + str(self.params.improve_procedure)) 
 			self.tmp_stats.append("BSS:" + str(best_solution_since))
 			self.tmp_stats.append("LP:" + str(len(self.params.LP)))
-			self.tmp_stats.append("ds:" + str(getStructuralDistance(self.params, sequence, RNAfold, RNAfold_pattern)))
+			self.tmp_stats.append("ds:" + str(best_solution[3]))
+			#self.tmp_stats.append("ds:" + str(getStructuralDistance(self.params, sequence, RNAfold, RNAfold_pattern)))
 			self.tmp_stats.append("dGC:" + str(best_solution[4]))
 			self.tmp_stats.append("GC:" + str(getGC(sequence)*100))
-			self.tmp_stats.append("dseq:" + str(getSequenceEditDistance(self.params.Cseq, sequence)))
-			self.tmp_stats.append("L:" + str(len(sequence)))
+
+			self.tmp_stats.append("dseq:" + str(best_solution[4]))
+			self.tmp_stats.append("L:" + str(len(self.tmp_sequence)))
 			self.tmp_stats.append("Time:" + str(duration))
 
-			self.tmp_sequence = best_solution[0]
-			self.tmp_structure = best_solution[1]		
+	
 			
 			
 			self.retrieveResult(n)
@@ -1550,7 +2207,7 @@ class AntHill:
 				else:
 					print2file(self.params.output_file, "\n".join(self.tmp_result), 'a')
 		else:
-			print self.tmp_result
+			#print self.tmp_result
 			self.result.append(tuple(self.tmp_result))
 			
 			
@@ -1563,8 +2220,13 @@ class Variables:
 		antaRNA Variables management.
 	"""
 	def __init__(self):
+		self.modus = "MFE"
 		self.Cstr = ""
-		self.Cseq = ""
+		self.accuracy = []
+		self.accessibility = []
+		self.diff_accuracy = []
+		self.diff_accessibility = []
+		self.Cseq = None
 		self.tGC = []
 		self.level = 1
 		self.tGCmax = -1.0
@@ -1600,10 +2262,16 @@ class Variables:
 		self.omega = 2.23
 		self.time = 600
 		self.error = "0"
+
 		
 
 	def readArgParseArguments(self, args):
+		self.modus = args.subparser.name
 		self.Cstr = args.Cstr
+		self.accuracy = args.accuracy
+		self.accessibility = args.accessibility
+		self.diff_accuracy = args.diff_accuracy
+		self.diff_accessibility = args.diff_accessibility
 		self.Cseq = args.Cseq
 		self.tGC = args.tGC
 		self.level = args.level
@@ -1731,76 +2399,337 @@ class Variables:
 				S += s
 		self.Cseq = S
 
+	def check_Accessibilities(access, L):
+		if access is None:
+			return ('nope', 'nope', 'nope')
+		else:
+			for i in access:
+				s1, s2, s3 = i
+				if s2 != "UB" and s2 != "B":
+					print "AccessibilityError: Wrongly defined Accessiblity", s1, s2, s3, "->", s2
+					exit(1)
+				if not isfloat(s3):
+					print "AccessibilityError: Wrongly defined Accessibility", s1, s2, s3, "->" , s3
+					exit(1)
+				if len(s1) != L:
+					print "AccessibilityError Constraint Length", len(s1), "is unequeal to Cstr length", L, "!"
+					exit(1)
+		return access
 
+	def check_Diff_Accessibilities(daccess, L):
+		if daccess is None:
+			return ('nope', 'nope','nope', 'nope', 'nope')
+		else:
+			for i in daccess:
+				s1, s2,s3, s4, s5 = i
+				if not isfloat(s3):
+					print "DiffAccessibilityError: Wrongly defined DiffAccessibility", s1, s2,s3, s4, s5, "->" , s3
+					exit(1)
+				if not isfloat(s5):
+					print "DiffAccessibilityError: Wrongly defined DiffAccessibility", s1, s2,s3, s4, s5, "->" , s5
+					exit(1)
+				if s3 < 0 or s3 > 1:
+					print "DiffAccessibilityError: Value",s3, "must remain in range [0,1]."
+					exit(1)
+				if s5 < 0 or s5 > 1:
+					print "DiffAccessibilityError: Value",s3, "must remain in range [0,1]."
+					exit(1)
+				if s2 != "UB" and s2 != "B":
+					print "DiffAccessibilityError: Value",s2, "must be selected from {\"UB\", \"B\"}."
+					exit(1)
+				if s4 != "UB" and s4 != "B":
+					print "DiffAccessibilityError: Value",s4, "must be selected from {\"UB\", \"B\"}."
+					exit(1)
+				if (s4 == "B" and s2 == "B") or (s4 == "UB" and s2 == "UB"):
+					print "DiffAccessibilityError: The constraint systems mus be different!."
+					exit(1)
+				if len(s1) != L:
+					print "DiffAccessibilityError: Constraint Length", len(s1), "is unequeal to Cstr length", L, "!"
+					exit(1)
+		return daccess
+		
+	def check_Accuracies(accur,L):
+		if accur is None:
+			return ('nope', 'nope', 'nope')
+		else:
+			for i in accur:
+				s1, s2, s3 = i
+				if s2 != "UB" and s2 != "B":
+					print "AccuracysError:: Wrongly defined Accuracy", s1, s2, s3, "->", s2
+					exit(1)
+				if not isfloat(s3):
+					print "AccuracysError::Wrongly defined Accuracy", s1, s2, s3, "->" , s3
+					exit(1)
+			if len(s1) != L:
+					print "AccuracyError: Constraint Length", len(s1), "is unequeal to Cstr length", L, "!"
+					exit(1)
+		return accur
+		
+	def check_Diff_Accuracies(daccur, L):
+		if daccur is None:
+			return ('nope', 'nope')
+		else:
+			for i in daccur:
+				s1, s2,s3, s4, s5 = i
+				if not isfloat(s3):
+					print "DiffAccuracyError: Wrongly defined DiffAccuracy", s1, s2,s3, s4, s5, "->" , s3
+					exit(1)
+				if not isfloat(s5):
+					print "DiffAccuracyError: Wrongly defined DiffAccuracy", s1, s2,s3, s4, s5, "->" , s5
+					exit(1)
+				if s3 < 0 or s3 > 1:
+					print "DiffAccuracyError: Value",s3, "must remain in range [0,1]."
+					exit(1)
+				if s5 < 0 or s5 > 1:
+					print "DiffAccuracyError: Value",s3, "must remain in range [0,1]."
+					exit(1)
+				if s2 != "UB" and s2 != "B":
+					print "DiffAccuracyError: Value",s2, "must be selected from {\"UB\", \"B\"}."
+					exit(1)
+				if s4 != "UB" and s4 != "B":
+					print "DiffAccuracyError: Value",s4, "must be selected from {\"UB\", \"B\"}."
+					exit(1)
+				if (s4 == "B" and s2 == "B") or (s4 == "UB" and s2 == "UB"):
+					print "DiffAccuracyError: The constraint systems mus be different!."
+					exit(1)
+				if len(s1) != L:
+					print "DiffAccuracyError: Constraint Length", len(s1), "is unequeal to Cstr length", L, "!"
+					exit(1)
+		return daccur
+
+		
+	def checkAccessibilityViolation(SC, conformation_dotplot, index, accessibility_request, L):
+		"""
+			Check if a requested accessibility for a certain position is 
+			violating the already made constraints of that position.
+		"""
+		i = index
+		if i in SC[conformation_dotplot + "_SS"]:
+			#print i, SC[conformation_dotplot + "_SS"][i]
+			if SC[conformation_dotplot + "_SS"][i][1] != None:
+				print "Position", i, "has already an affiliated accessibility"
+				exit(1)
+			else: # accessibility == None
+				accur_i, access_i = SC[conformation_dotplot + "_SS"][i]
+				if 1-accur_i < accessibility_request:
+					print "Requested accessibility exceeds an already made accuracy setting..."
+					exit(1)
+				SC[conformation_dotplot + "_SS"][i][1] = (accur_i, accessibility_request)
+		else:
+			SC[conformation_dotplot + "_SS"][i] = (None, accessibility_request)
+			
+
+	def checkAccuracyViolation(SC, conformation_dotplot, index, accuracy_request):
+		"""
+			Check if a requested accuracy value for a certain position is 
+			violating the already made constraints of that position.
+		"""
+		i, j = index
+		# CASES OF base pair i,j or j,i have already been occupied and therefore 
+		# will not allow further allocation in structure feature
+		if (i, j) in SC[conformation_dotplot + "_BP"]:
+			if SC[conformation_dotplot + "_BP"][(i, j)][0] != None:
+				print "Affected base pair ", (i, j), "has already been occupied by another accuracy constraint."
+				exit(1)
+		if (j, i) in SC[conformation_dotplot + "_BP"]:
+			if SC[conformation_dotplot + "_BP"][(j, i)][0] != None:
+				print "Affected base pair ", (j, i), "has already been occupied by another accuracy constraint."
+				exit(1)
+
+		# CASE OF i
+		if i not in SC[conformation_dotplot + "_SS"]: # Case of info for position i have not been collected yet.	
+			SC[conformation_dotplot + "_SS"][i] = (accuracy_request, None)
+			SC[conformation_dotplot + "_BP"][(i, j)] = accuracy_request
+			
+		else: # Case of some info for position i have already been allocated
+			accur_i, access_i = SC[conformation_dotplot+"_SS"][i]
+			if accur_i != None and access_i != None:
+				if accur_i + accuracy_request > 1:
+					print "StructureFeatureRequestError: Requested Accuracy exceeds limit of 1 and is not permitted to be added."
+					exit(1)
+				if 1 - (accuracy_request + accur_i) < access_i:
+					print "StructureFeatureRequestError: Requested Accuracy undermines a constrained accessibility"
+					exit(1) 
+				SC[conformation_dotplot+"_SS"][i] = (accur_i + accuracy_request , access_i)
+				SC[conformation_dotplot + "_BP"][(i, j)] = accuracy_request	
+			elif accur_i != None and access_i == None:
+				if accur_i + accuracy_request > 1:
+					print "StructureFeatureRequestError: Requested Accuracy exceeds limit of 1 and is not permitted to be added."
+					exit(1)
+				SC[conformation_dotplot+"_SS"][i] = (accur_i + accuracy_request , access_i)
+				SC[conformation_dotplot + "_BP"][(i, j)] = accuracy_request
+			
+			elif accur_i == None and access_i != None:
+				if 1 - accuracy_request < access_i:
+					print "StructureFeatureRequestError: Requested Accuracy undermines a constrained accessibility"
+					exit(1) 
+				SC[conformation_dotplot+"_SS"][i] = (accuracy_request , access_i)
+				SC[conformation_dotplot + "_BP"][(i, j)] = accuracy_request
+
+		# CASE OF j
+		if j not in SC[conformation_dotplot + "_SS"]: # Case of info for position i have not been collected yet.	
+			SC[conformation_dotplot + "_SS"][j] = (accuracy_request, None)
+			SC[conformation_dotplot + "_BP"][(j, i)] = accuracy_request
+			
+		else: # Case of some info for position i have already been allocated
+			accur_j, access_j = SC[conformation_dotplot+"_SS"][j]
+			if accur_j != None and access_j != None:
+				if accur_j + accuracy_request > 1:
+					print "StructureFeatureRequestError: Requested Accuracy exceeds limit of 1 and is not permitted to be added."
+					exit(1)
+				if 1 - (accuracy_request + accur_j) < access_j:
+					print "StructureFeatureRequestError: Requested Accuracy undermines a constrained accessibility"
+					exit(1) 
+				SC[conformation_dotplot+"_SS"][j] = (accur_j + accuracy_request , access_j)
+				SC[conformation_dotplot + "_BP"][(j, i)] = accuracy_request
+					
+			elif accur_j != None:
+				if accur_j + accuracy_request > 1:
+					print "StructureFeatureRequestError: Requested Accuracy exceeds limit of 1 and is not permitted to be added."
+					exit(1)
+				SC[conformation_dotplot+"_SS"][j] = (accur_j + accuracy_request , access_j)
+				SC[conformation_dotplot + "_BP"][(j, i)] = accuracy_request
+				
+			elif access_j != None:
+				if (1 - accuracy_request) < access_j:
+					print "StructureFeatureRequestError: Requested Accuracy undermines a constrained accessibility"
+					exit(1) 
+				SC[conformation_dotplot+"_SS"][j] = (accuracy_request , access_j)
+				SC[conformation_dotplot + "_BP"][(j, i)] = accuracy_request
+		
 	def check(self):
 		"""
 			CHECK THE COMMAND LINE STUFF
 		"""
+
 		self.print_to_STDOUT = (self.output_file == "STDOUT")
-		if self.Cseq == "":
-			self.Cseq = "N" * len(self.Cstr)
 
-		self.parse_GC_management()
 
-		self.checkForViennaTools()
-		self.usedProgram = "RNAfold"
-		if self.pseudoknots:
-			if self.pkprogram == "pKiss":
-				self.checkForpKiss()
-				if self.pkparameter == True:
-					self.alpha = 1.0
-					self.beta = 0.1
-					self.ER = 0.2 
-					self.Cstrweight = 0.1 
-					self.Cgcweight = 1.0 
-					self.Cseqweight = 0.5 
-					self.Cseqweight = 50 
-					self.ConvergenceCount = 100
-					self.usedProgram = "pKiss"
-			elif self.pkprogram == "HotKnots" and self.HotKnots_PATH != "":
-				self.checkForHotKnots(args)
-				if self.pkparameter == True:
-					self.alpha = 1.0
-					self.beta = 0.1
-					self.ER = 0.2 
-					self.Cstrweight = 0.1 
-					self.Cgcweight = 1.0 
-					self.Cseqweight = 0.5 
-					self.Cseqweight = 50 
-					self.ConvergenceCount = 100
-					self.usedProgram = "HotKnots"
-			elif self.pkprogram == "IPKnot":
-				self.checkForIPKnot()
-				if self.pkparameter == True:
-					self.alpha = 1.0
-					self.beta = 0.1
-					self.ER = 0.2 
-					self.Cstrweight = 0.1 
-					self.Cgcweight = 1.0 
-					self.Cseqweight = 0.5 
-					self.Cseqweight = 50 
-					self.ConvergenceCount = 100
-					self.usedProgram = "IPKnot"
-			else:
-				error = " Please choose a suitable pseudoknot predictor: [pKiss|Hotknots|IPKnot]"
-				self.error = error
+		if self.mode == "MFE":
+			if self.Cseq is None:
+				self.Cseq = "N" * len(self.Cstr)
 
-				
-		# Constraint Checks and Parsing prior to Execution
-		self.checkSimilarLength()
-		if self.error == "0":
-			self.isStructure()
-		if self.error == "0":	
-			self.isBalanced()
-		if self.error == "0":
-			self.fulfillsHairpinRule()
-		if self.error == "0":
-			self.checkSequenceConstraint()
-		if self.error == "0":
-			self.parseExtendedVariables()
-		if self.error == "0":
-			self.checkConstaintCompatibility()
+			self.parse_GC_management()
+			self.length = len(self.Cstr)
+
+			self.checkForViennaTools()
+			self.usedProgram = "RNAfold"
+			if self.pseudoknots:
+				if self.pkprogram == "pKiss":
+					self.checkForpKiss()
+					if self.pkparameter == True:
+						self.alpha = 1.0
+						self.beta = 0.1
+						self.ER = 0.2 
+						self.Cstrweight = 0.1 
+						self.Cgcweight = 1.0 
+						self.Cseqweight = 0.5 
+						self.Cseqweight = 50 
+						self.ConvergenceCount = 100
+						self.usedProgram = "pKiss"
+				elif self.pkprogram == "HotKnots" and self.HotKnots_PATH != "":
+					self.checkForHotKnots(args)
+					if self.pkparameter == True:
+						self.alpha = 1.0
+						self.beta = 0.1
+						self.ER = 0.2 
+						self.Cstrweight = 0.1 
+						self.Cgcweight = 1.0 
+						self.Cseqweight = 0.5 
+						self.Cseqweight = 50 
+						self.ConvergenceCount = 100
+						self.usedProgram = "HotKnots"
+				elif self.pkprogram == "IPKnot":
+					self.checkForIPKnot()
+					if self.pkparameter == True:
+						self.alpha = 1.0
+						self.beta = 0.1
+						self.ER = 0.2 
+						self.Cstrweight = 0.1 
+						self.Cgcweight = 1.0 
+						self.Cseqweight = 0.5 
+						self.Cseqweight = 50 
+						self.ConvergenceCount = 100
+						self.usedProgram = "IPKnot"
+				else:
+					error = " Please choose a suitable pseudoknot predictor: [pKiss|Hotknots|IPKnot]"
+					self.error = error
+
+					
+			# Constraint Checks and Parsing prior to Execution
+			self.checkSimilarLength()
+			if self.error == "0":
+				self.isStructure()
+			if self.error == "0":	
+				self.isBalanced()
+			if self.error == "0":
+				self.fulfillsHairpinRule()
+			if self.error == "0":
+				self.checkSequenceConstraint()
+			if self.error == "0":
+				self.parseExtendedVariables()
+			if self.error == "0":
+				self.checkConstaintCompatibility()
 		
+		elif self.mode = "DP":
+			print "Access", args.accessibility
+			print "Accur", args.accuracy
+			print "Diff_access", args.Diff_accessibility
+			print "Diff_accur", args.Diff_accuracy
+			
+			structurefeature_check = 0
+			
+			args.length = None
+			if "accessibility" in vars(args):
+				if args.length == None and args.accessibility != None:
+					args.length = len(args.accessibility[0][0])
+					
+				#accessibilities = args.accessibility
+				args.accessibility = check_Accessibilities(args.accessibility, args.length)
+				if type(args.accessibility) == list:
+					structurefeature_check += 1
+				#print "Access", args.accessibility
+				
+			if "accuracy" in vars(args):
+				if args.length == None and args.accuracy != None:
+					args.length = len(args.accuracy[0][0])
+				#accuracies = args.accuracy
+				args.accuracy = check_Accuracies(args.accuracy, args.length)
+				if type(args.accuracy) == list:
+					structurefeature_check += 1
+				#print "ACCUR",args.accuracy
+				
+			if "Diff_accessibility" in (args):
+				if args.length == None and args.Diff_accessibility != None:
+					args.length = len(args.Diff_accessibility[0][0])
+				#accessibilities = args.accessibility
+				args.Diff_accessibility = check_Diff_Accessibilities(args.Diff_accessibility, args.length)
+				if type(args.Diff_accessibility) == list:
+					structurefeature_check += 1
+				#print "DiffAccess", args.Diff_accessibility
+				
+			if "Diff_accuracy" in vars(args):
+				if args.length == None and args.Diff_accuracy != None:
+					args.length = len(args.Diff_accuracy[0][0])
+				#accuracies = args.accuracy
+				print args.Diff_accuracy
+				args.Diff_accuracy = check_Diff_Accuracies(args.Diff_accuracy, args.length)
+				if type(args.Diff_accuracy) == list:
+					structurefeature_check += 1
+				#print "DiffACCUR",args.Diff_accuracy
+			#print structurefeature_check
+			if structurefeature_check == 0:
+				print "No structure constraint defined. Please define structural elements by using the accuracy of structure elements (basepairs) and accessibility of sequence stretches."
+				exit(1)
+			else:
+				#print args
+				if args.Cseq == None:
+					args.Cseq = args.length * "N"
+				transform(args)
+				
+				parse_StructureFeatures(args)
+				getPostionalInterconnection(args)
+				getPositionFeatures(args)
 
 
 	def parseExtendedVariables(self):
@@ -1853,7 +2782,8 @@ class Variables:
 			a categorial pyrimidine/purine decision. (ACGU, SW)
 			
 		"""
-		nucleotide_contribution = 1/float(len(self.Cseq)) * 1
+
+		nucleotide_contribution = 1/float(len(self.Cseq)) 
 		
 		minGC = 0.0
 		maxGC = 1.0
@@ -1880,42 +2810,39 @@ class Variables:
 			if len(t) != 3:
 				error = "Error :: Not enough tGC and affiliated areas declarations"
 				self.error = error
-				print error
-				exit(1)
-				
-		check_set = set(range(1,len(self.Cstr) + 1))
-		curr_set = set()
-		for i, area in enumerate(self.tGC): # CHECK if the areas are consistent and do not show disconnectivity.
-			v, s1, s2 = area
-			if i < 0 or i > 1:
-				error = "Error: Chosen tGC > %s < not in range [0,1]" % (i)
+
+		if self.error == "0":
+			check_set = set(range(1,len(self.Cstr) + 1))
+			curr_set = set()
+			for i, area in enumerate(self.tGC): # CHECK if the areas are consistent and do not show disconnectivity.
+				v, s1, s2 = area
+				if i < 0 or i > 1:
+					error = "Error: Chosen tGC > %s < not in range [0,1]" % (i)
+					self.error = error
+
+				if self.error == "0":
+					tmp_set = set(range(int(s1), int(s2 + 1)))
+					if len(curr_set.intersection(tmp_set)) == 0:
+						curr_set = curr_set.union(tmp_set)
+					else: 
+						error = "Error: Double defined tGC declaration area sector detected. Nucleotide positions", ", ".join(str(e) for e in curr_set.intersection(tmp_set)), "show(s) redundant tGC declaration"
+						self.error = error
+
+		if self.error == "0":				
+			if len(curr_set.symmetric_difference(check_set)) != 0:
+				error = "Error: Undefined tGC area sectors detected. Nucleotide positions", ", ".join(str(e) for e in curr_set.symmetric_difference(check_set)), "is/are not covered."
 				self.error = error
-				print error
-				exit(1)
-			tmp_set = set(range(int(s1), int(s2 + 1)))
-			if len(curr_set.intersection(tmp_set)) == 0:
-				curr_set = curr_set.union(tmp_set)
-			else: 
-				error = "Error: Double defined tGC declaration area sector detected. Nucleotide positions", ", ".join(str(e) for e in curr_set.intersection(tmp_set)), "show(s) redundant tGC declaration"
-				self.error = error
-				print error
-				exit(1)
-				
-		if len(curr_set.symmetric_difference(check_set)) != 0:
-			error = "Error: Undefined tGC area sectors detected. Nucleotide positions", ", ".join(str(e) for e in curr_set.symmetric_difference(check_set)), "is/are not covered."
-			self.error = error
-			print error
-			exit(1)
-			
+
+		
 		for tgc in self.tGC: # CHECK if the specified GC values can be reached at all...
-			v, start, stop = tgc
-			tmp_sc = self.Cseq[start:stop + 1]
-			minGC, maxGC = self.reachableGC()
-			if v > maxGC or v < minGC:
-				error = "WARNING: Chosen target GC %s content is not reachable. The selected sequence constraint contradicts the tGC constraint value. Sequence Constraint allows tGC only to be in [%s,%s]" % (v, minGC, maxGC) 
-				self.error = error 
-				print >> sys.stderr, error
-				exit (1)
+			if self.error == "0":
+				v, start, stop = tgc
+				tmp_sc = self.Cseq[start:stop + 1]
+				minGC, maxGC = self.reachableGC()
+				if v > maxGC or v < minGC:
+					error = "WARNING: Chosen target GC %s content is not reachable. The selected sequence constraint contradicts the tGC constraint value. Sequence Constraint allows tGC only to be in [%s,%s]" % (v, minGC, maxGC) 
+					self.error = error 
+
 
 
 	
@@ -1992,15 +2919,3 @@ if __name__ == "__main__":
 
 	exe()
     
-
-  
-
- 
-
-
-
-
-
-  
-
- 
