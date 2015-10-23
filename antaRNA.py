@@ -505,6 +505,16 @@ def isCompatible(c1, c2, IUPAC_compatibles):
 	else:
 		return False
 
+def compareLists(l1, l2):
+	"""
+		Compares reverse complement constraint lists.
+	"""
+	a = list(l1)
+	b = list(l2)
+	for i in a:
+		if i not in b:
+			return False
+	return True
 
 #######################################
 # STRUCTURE AND DICTIONARY MANAGEMENT
@@ -659,7 +669,7 @@ def getConstraint(terrain_element, args):
 	
 	targetNucleotide = terrain_element.split(".")[1][-1:] # where the edge is leading to
 
-	
+
 	if args.modus == "MFE":
 	
 		val = args.BPstack[id1] # check out the value of the destination character in the basepair/constraint stack
@@ -742,18 +752,18 @@ def initTerrain(args):
 	"""
 	nt = ["A","C","G","U"] 
 	nt2 = ["AA","AC","AG","AU","CA","CC","CG","CU","GA","GC","GG","GU","UA","UC","UG","UU"] # Allowed dinucleotides
-	args.terrain = {}
+	e = {}
 	pathlength = 1
 	pheromone = 1
-	for p in xrange(len(args.Cstr)):
+	for p in xrange(args.length):
 		if p == 0:
 			for i in nt:
-				args.terrain["%s.%s"%(p,i)] = (pheromone, pathlength)
+				e["%s.%s"%(p,i)] = (pheromone, pathlength)
 		elif p > 0:
 			for n in nt2:
-				args.terrain["%s.%s"%(p,n)] = (pheromone, pathlength)
+				e["%s.%s"%(p,n)] = (pheromone, pathlength)
+	args.terrain = e
 
-	
 def applyTerrainModification(args):
 	"""
 		Dependent on the input, this function modifies the terrain accordingly. 
@@ -766,13 +776,16 @@ def applyTerrainModification(args):
 		v, s1, s2 = i
 		for j in range(s1-1,s2):
 			actGC[j] = v
-			
 	dels = []
 	for terrainelement in sorted(args.terrain):
 		pheromone, pathlength = args.terrain[terrainelement]
-		pheromone = getConstraint(terrainelement, args)
-		pathlength = getConstraint(terrainelement, args)
+		
+		pheromone = getConstraint(terrainelement,args)
+		
+		#pathlength = getConstraint(terrainelement, args) # is redundant, since the pheromone would have been dealt with this info already...
 		pathlength = applyGCcontributionPathAdjustment(pathlength, actGC, terrainelement)
+		
+		
 		if pheromone * pathlength == 0: dels.append(terrainelement)
 		args.terrain[terrainelement] = (pheromone, pathlength,[])
 	
@@ -793,7 +806,7 @@ def applyTerrainModification(args):
 	for terrainelement in args.terrain:
 		pheromone, pathlength, children = args.terrain[terrainelement]
 		pos, nucs = terrainelement.split(".")
-		if int(pos) < len(args.Cstr):
+		if int(pos) < args.length:
 			to_nt = nucs[-1:]
 			successor_pos = int(pos) + 1
 			for i in ["A", "C", "G", "U"]:
@@ -806,7 +819,14 @@ def applyTerrainModification(args):
 		if str(0) + "." + i in args.terrain:
 			starts.append(str(0) + "." + i)
 	args.terrain["00.XY"] = (1, 1, starts)
-
+	
+	# CHECK IF THERE ARE EMPTY SUCCESSOR INFORMATION WITHIN THE SEQUENCE
+	for terrainelement in args.terrain:
+		pher, length, successors = args.terrain[terrainelement]
+		id1 = terrainelement.split(".")[0]
+		#print id1 ,len(args.Cseq), len(successors)
+		if id1 < len(args.Cseq) and len(successors) == 0:
+			args.error = "TerrainError: No successors detected where some should have appeared! %s %s" % (terrainelement, args.terrain[terrainelement])
 	
 	
 def applyGCcontributionPathAdjustment(pathlength, actGC, terrainelement):
@@ -819,12 +839,13 @@ def applyGCcontributionPathAdjustment(pathlength, actGC, terrainelement):
 	lower = minimum
 	position , nts = terrainelement.split(".")
 	nt = nts[-1:]
-	
 	if nt == "A" or nt == "U":
 		pathlength = pathlength * maprange( (0, 1) , (lower, upper), actGC[int(position)])
 	elif nt == "G" or nt == "C":
 		pathlength = pathlength * maprange( (1, 0) , (lower, upper), actGC[int(position)])
 	return pathlength
+
+
   
 def printTerrain(terrain):
 	"""
@@ -970,6 +991,7 @@ def getSequenceFromSelection(args, RNAfold, RNAfold_pattern):
 	for i in xrange(args.ants_per_selection): # for k ants do:
 		# Generate Sequence
 		sequence = getSequence(args)
+		
 		# Measure sequence features and transform them into singular distances
 		ds, structure = getStructuralDistance(args, sequence, RNAfold, RNAfold_pattern)
 		dGC = getGCDistance(sequence, args)
@@ -1301,8 +1323,8 @@ def getStructuralDistance(args, sequence, RNAfold, RNAfold_pattern):
 		# Differential Accessibility Structural Feature
 		#print "DiffAccessibility:"
 		ddsf_access = 0
-		if "Diffaccess" in args:
-			for i in args.Diffaccess:
+		if args.diffaccess:
+			for i in args.diffaccess:
 				#print i
 				for c in i[0]:
 					tmp_c = {c:c}
@@ -1320,8 +1342,8 @@ def getStructuralDistance(args, sequence, RNAfold, RNAfold_pattern):
 		
 		# Differential Accuracy Structural Feature
 		ddsf_diff_accur = 0
-		if "Diffaccur" in args:
-			for i in args.Diffaccur:
+		if args.diffaccur:
+			for i in args.diffaccur:
 				for c in i[0]:
 					tmp_c = {c:i[0][c]}
 					res = {}
@@ -1340,7 +1362,7 @@ def getStructuralDistance(args, sequence, RNAfold, RNAfold_pattern):
 		
 		# Accessibility structural feature
 		dsf_access = 0
-		if "access" in args:
+		if args.access:
 			for i in args.access:
 				for c in i[0]:
 					tmp_c = {c:c}
@@ -1353,7 +1375,7 @@ def getStructuralDistance(args, sequence, RNAfold, RNAfold_pattern):
 		
 		# Accuracy structural feature
 		dsf_accur = 0
-		if "accur" in args:
+		if args.accur:
 			for i in args.accur:
 				for c in i[0]:
 					tmp_c = {c:i[0][c]}
@@ -1370,12 +1392,7 @@ def getStructuralDistance(args, sequence, RNAfold, RNAfold_pattern):
 		dsf = dsf_accur + dsf_access
 
 		d = (ddsf + dsf) / max_struct_deviation * 100
-		
-		
-		
-		print args
-		
-		exit(1)
+
 		return d , DP
 		
 		
@@ -1450,7 +1467,7 @@ def trailBlaze(sequence, current_structure, ds, dgc, dseq, args):
 	"""
 		Pheromone Update function accorinding to the quality of the solution
 	"""
-	bpstack, LP = getbpStack(current_structure)
+	
 	bs = updateValue(ds, args.Cstrweight, args.omega)
 	bGC = updateValue(dgc, args.Cgcweight, args.omega)
 	bSeq = updateValue(dseq, args.Cseqweight, args.omega)
@@ -1459,6 +1476,7 @@ def trailBlaze(sequence, current_structure, ds, dgc, dseq, args):
 	transitions = getTransitions(sequence)
 	#print args
 	if args.modus == "MFE":
+
 		bpstack, LP = getbpStack(current_structure)
 		for trans in xrange(len(transitions)): # for each transition in the path
 			id1 = int(transitions[trans].split(".")[0])
@@ -1483,7 +1501,9 @@ def trailBlaze(sequence, current_structure, ds, dgc, dseq, args):
 		# In addition, one could check, if the base is involved in a larger 
 		# interconnection complex. and bonify it only, if the whole complex is 
 		# satisfying within the dotplots.
+
 		T = transformTransitions(transitions)
+
 		#print args.PosFeatures
 		#exit(1)
 		
@@ -1533,9 +1553,9 @@ def trailBlaze(sequence, current_structure, ds, dgc, dseq, args):
 
 					for edge in edges:
 						try:
-							p, l, c = args.Terrain[edge] # getting the pheromone and the length value of the single path transition
+							p, l, c = args.terrain[edge] # getting the pheromone and the length value of the single path transition
 							p +=  d * (1-abs(val - value)) * 100000
-							args.Terrain[transitions[t_i]] = (p, l, c)
+							args.terrain[transitions[t_i]] = (p, l, c)
 						except:
 							pass
 
@@ -1600,6 +1620,14 @@ def getTransitions(p):
 			transitions.append(str(pos) + "." + insert)
 
 	return transitions
+
+def transformTransitions(transitions):
+	
+	T = {}
+	for t in transitions:
+		index, letters = t.split(".")
+		T[index] = letters
+	return T
 
 def updateValue(distance, correction_term, omega):
 	"""
@@ -1979,13 +2007,20 @@ class AntHill:
 		RNAfold_pattern = re.compile('.+\n([.()]+)\s.+')
 			
 		for n in xrange(self.params.noOfColonies):
+
 			start_time = time.time()
 
-			# INITIALIZATION OF Vienna RNAfold
 
-			
+			self.params.GC = []
+			if len(self.params.tGC) == 1:
+				self.params.GC = [(getGCSamplingValue(self.params.tGC[0][0], self.params.tGCmax, self.params.tGCvar), self.params.tGC[0][1], self.params.tGC[0][2])]
+			else:
+				self.params.GC = self.params.tGC
+			print "before init"
 			initTerrain(self.params) 
+			print "before modification"
 			applyTerrainModification(self.params)
+
 			global_ant_count = 0
 			global_best_ants = 0
 			criterion = False
@@ -2030,7 +2065,7 @@ class AntHill:
 				global_best_ants += 1
 
 				sequence_info = getSequenceFromSelection(self.params, RNAfold, RNAfold_pattern)
-
+				
 				distance_structural_prev = ds
 				distance_GC_prev = dGC
 				distance_seq_prev = dseq
@@ -2226,6 +2261,7 @@ class Variables:
 		self.accessibility = []
 		self.diff_accuracy = []
 		self.diff_accessibility = []
+		self.length = 0
 		self.Cseq = None
 		self.tGC = []
 		self.level = 1
@@ -2399,127 +2435,88 @@ class Variables:
 				S += s
 		self.Cseq = S
 
-	def check_Accessibilities(access, L):
-		if access is None:
-			return ('nope', 'nope', 'nope')
-		else:
-			for i in access:
-				s1, s2, s3 = i
-				if s2 != "UB" and s2 != "B":
-					print "AccessibilityError: Wrongly defined Accessiblity", s1, s2, s3, "->", s2
-					exit(1)
-				if not isfloat(s3):
-					print "AccessibilityError: Wrongly defined Accessibility", s1, s2, s3, "->" , s3
-					exit(1)
-				if len(s1) != L:
-					print "AccessibilityError Constraint Length", len(s1), "is unequeal to Cstr length", L, "!"
-					exit(1)
-		return access
+	def check_Accessibilities(self):
+		for i in self.accessibility:
+			s1, s2, s3 = i
+			if s2 != "UB" and s2 != "B":
+				self.error = "AccessibilityError: Wrongly defined Accessiblity", s1, s2, s3, "->", s2
+			if not isfloat(s3):
+				self.error = "AccessibilityError: Wrongly defined Accessibility", s1, s2, s3, "->" , s3
+			if len(s1) != self.length:
+				self.error = "AccessibilityError Constraint Length", len(s1), "is unequeal to Cstr length", self.length, "!"
 
-	def check_Diff_Accessibilities(daccess, L):
-		if daccess is None:
-			return ('nope', 'nope','nope', 'nope', 'nope')
-		else:
-			for i in daccess:
-				s1, s2,s3, s4, s5 = i
-				if not isfloat(s3):
-					print "DiffAccessibilityError: Wrongly defined DiffAccessibility", s1, s2,s3, s4, s5, "->" , s3
-					exit(1)
-				if not isfloat(s5):
-					print "DiffAccessibilityError: Wrongly defined DiffAccessibility", s1, s2,s3, s4, s5, "->" , s5
-					exit(1)
-				if s3 < 0 or s3 > 1:
-					print "DiffAccessibilityError: Value",s3, "must remain in range [0,1]."
-					exit(1)
-				if s5 < 0 or s5 > 1:
-					print "DiffAccessibilityError: Value",s3, "must remain in range [0,1]."
-					exit(1)
-				if s2 != "UB" and s2 != "B":
-					print "DiffAccessibilityError: Value",s2, "must be selected from {\"UB\", \"B\"}."
-					exit(1)
-				if s4 != "UB" and s4 != "B":
-					print "DiffAccessibilityError: Value",s4, "must be selected from {\"UB\", \"B\"}."
-					exit(1)
-				if (s4 == "B" and s2 == "B") or (s4 == "UB" and s2 == "UB"):
-					print "DiffAccessibilityError: The constraint systems mus be different!."
-					exit(1)
-				if len(s1) != L:
-					print "DiffAccessibilityError: Constraint Length", len(s1), "is unequeal to Cstr length", L, "!"
-					exit(1)
-		return daccess
+	def check_Diff_Accessibilities(self):
+		for i in self.diff_accessibility:
+			s1, s2,s3, s4, s5 = i
+			if not isfloat(s3):
+				self.error = "DiffAccessibilityError: Wrongly defined DiffAccessibility", s1, s2,s3, s4, s5, "->" , s3
+			if not isfloat(s5):
+				self.error = "DiffAccessibilityError: Wrongly defined DiffAccessibility", s1, s2,s3, s4, s5, "->" , s5
+			if s3 < 0 or s3 > 1:
+				self.error = "DiffAccessibilityError: Value",s3, "must remain in range [0,1]."
+			if s5 < 0 or s5 > 1:
+				self.error = "DiffAccessibilityError: Value",s3, "must remain in range [0,1]."
+			if s2 != "UB" and s2 != "B":
+				self.error = "DiffAccessibilityError: Value",s2, "must be selected from {\"UB\", \"B\"}."
+			if s4 != "UB" and s4 != "B":
+				self.error = "DiffAccessibilityError: Value",s4, "must be selected from {\"UB\", \"B\"}."
+			if (s4 == "B" and s2 == "B") or (s4 == "UB" and s2 == "UB"):
+				self.error = "DiffAccessibilityError: The constraint systems mus be different!."
+			if len(s1) != self.length:
+				self.error = "DiffAccessibilityError: Constraint Length", len(s1), "is unequeal to Cstr length", self.length, "!"
 		
-	def check_Accuracies(accur,L):
-		if accur is None:
-			return ('nope', 'nope', 'nope')
-		else:
-			for i in accur:
-				s1, s2, s3 = i
-				if s2 != "UB" and s2 != "B":
-					print "AccuracysError:: Wrongly defined Accuracy", s1, s2, s3, "->", s2
-					exit(1)
-				if not isfloat(s3):
-					print "AccuracysError::Wrongly defined Accuracy", s1, s2, s3, "->" , s3
-					exit(1)
-			if len(s1) != L:
-					print "AccuracyError: Constraint Length", len(s1), "is unequeal to Cstr length", L, "!"
-					exit(1)
-		return accur
-		
-	def check_Diff_Accuracies(daccur, L):
-		if daccur is None:
-			return ('nope', 'nope')
-		else:
-			for i in daccur:
-				s1, s2,s3, s4, s5 = i
-				if not isfloat(s3):
-					print "DiffAccuracyError: Wrongly defined DiffAccuracy", s1, s2,s3, s4, s5, "->" , s3
-					exit(1)
-				if not isfloat(s5):
-					print "DiffAccuracyError: Wrongly defined DiffAccuracy", s1, s2,s3, s4, s5, "->" , s5
-					exit(1)
-				if s3 < 0 or s3 > 1:
-					print "DiffAccuracyError: Value",s3, "must remain in range [0,1]."
-					exit(1)
-				if s5 < 0 or s5 > 1:
-					print "DiffAccuracyError: Value",s3, "must remain in range [0,1]."
-					exit(1)
-				if s2 != "UB" and s2 != "B":
-					print "DiffAccuracyError: Value",s2, "must be selected from {\"UB\", \"B\"}."
-					exit(1)
-				if s4 != "UB" and s4 != "B":
-					print "DiffAccuracyError: Value",s4, "must be selected from {\"UB\", \"B\"}."
-					exit(1)
-				if (s4 == "B" and s2 == "B") or (s4 == "UB" and s2 == "UB"):
-					print "DiffAccuracyError: The constraint systems mus be different!."
-					exit(1)
-				if len(s1) != L:
-					print "DiffAccuracyError: Constraint Length", len(s1), "is unequeal to Cstr length", L, "!"
-					exit(1)
-		return daccur
+	def check_Accuracies(self):
+		print self.accuracy
+		for i in self.accuracy:
+			print i
+			s1, s2, s3 = i
+			if s2 != "UB" and s2 != "B":
+				self.error = "AccuracysError:: Wrongly defined Accuracy", s1, s2, s3, "->", s2
+			if not isfloat(s3):
+				self.error = "AccuracysError::Wrongly defined Accuracy", s1, s2, s3, "->" , s3
+			if len(s1) != self.length:
+				self.error = "AccuracyError: Constraint Length", len(s1), "is unequeal to Cstr length", self.length, "!"
+
+	def check_Diff_Accuracies(self):
+		for i in self.diff_accuracy:
+			s1, s2,s3, s4, s5 = i
+			if not isfloat(s3):
+				self.error = "DiffAccuracyError: Wrongly defined DiffAccuracy", s1, s2,s3, s4, s5, "->" , s3
+			if not isfloat(s5):
+				self.error = "DiffAccuracyError: Wrongly defined DiffAccuracy", s1, s2,s3, s4, s5, "->" , s5
+			if s3 < 0 or s3 > 1:
+				self.error = "DiffAccuracyError: Value",s3, "must remain in range [0,1]."
+			if s5 < 0 or s5 > 1:
+				self.error = "DiffAccuracyError: Value",s3, "must remain in range [0,1]."
+			if s2 != "UB" and s2 != "B":
+				self.error = "DiffAccuracyError: Value",s2, "must be selected from {\"UB\", \"B\"}."
+			if s4 != "UB" and s4 != "B":
+				self.error = "DiffAccuracyError: Value",s4, "must be selected from {\"UB\", \"B\"}."
+			if (s4 == "B" and s2 == "B") or (s4 == "UB" and s2 == "UB"):
+				self.error = "DiffAccuracyError: The constraint systems mus be different!."
+			if len(s1) != self.length:
+				self.error = "DiffAccuracyError: Constraint Length", len(s1), "is unequeal to Cstr length", self.length, "!"
 
 		
-	def checkAccessibilityViolation(SC, conformation_dotplot, index, accessibility_request, L):
+	def checkAccessibilityViolation(self, conformation_dotplot, index, accessibility_request):
 		"""
 			Check if a requested accessibility for a certain position is 
 			violating the already made constraints of that position.
 		"""
 		i = index
-		if i in SC[conformation_dotplot + "_SS"]:
-			#print i, SC[conformation_dotplot + "_SS"][i]
-			if SC[conformation_dotplot + "_SS"][i][1] != None:
-				print "Position", i, "has already an affiliated accessibility"
-				exit(1)
+		if i in self.SC[conformation_dotplot + "_SS"]:
+			if self.SC[conformation_dotplot + "_SS"][i][1] != None:
+				self.error = "Position", i, "has already an affiliated accessibility"
 			else: # accessibility == None
-				accur_i, access_i = SC[conformation_dotplot + "_SS"][i]
+				accur_i, access_i = self.SC[conformation_dotplot + "_SS"][i]
 				if 1-accur_i < accessibility_request:
-					print "Requested accessibility exceeds an already made accuracy setting..."
-					exit(1)
+					self.error = "Requested accessibility exceeds an already made accuracy setting..."
 				SC[conformation_dotplot + "_SS"][i][1] = (accur_i, accessibility_request)
 		else:
 			SC[conformation_dotplot + "_SS"][i] = (None, accessibility_request)
 			
 
-	def checkAccuracyViolation(SC, conformation_dotplot, index, accuracy_request):
+	def checkAccuracyViolation(self, conformation_dotplot, index, accuracy_request):
 		"""
 			Check if a requested accuracy value for a certain position is 
 			violating the already made constraints of that position.
@@ -2527,75 +2524,65 @@ class Variables:
 		i, j = index
 		# CASES OF base pair i,j or j,i have already been occupied and therefore 
 		# will not allow further allocation in structure feature
-		if (i, j) in SC[conformation_dotplot + "_BP"]:
-			if SC[conformation_dotplot + "_BP"][(i, j)][0] != None:
-				print "Affected base pair ", (i, j), "has already been occupied by another accuracy constraint."
-				exit(1)
-		if (j, i) in SC[conformation_dotplot + "_BP"]:
-			if SC[conformation_dotplot + "_BP"][(j, i)][0] != None:
-				print "Affected base pair ", (j, i), "has already been occupied by another accuracy constraint."
-				exit(1)
+		if (i, j) in self.SC[conformation_dotplot + "_BP"]:
+			if self.SC[conformation_dotplot + "_BP"][(i, j)][0] != None:
+				self.error = "Affected base pair ", (i, j), "has already been occupied by another accuracy constraint."
+		if (j, i) in self.SC[conformation_dotplot + "_BP"]:
+			if self.SC[conformation_dotplot + "_BP"][(j, i)][0] != None:
+				self.error = "Affected base pair ", (j, i), "has already been occupied by another accuracy constraint."
 
 		# CASE OF i
-		if i not in SC[conformation_dotplot + "_SS"]: # Case of info for position i have not been collected yet.	
-			SC[conformation_dotplot + "_SS"][i] = (accuracy_request, None)
-			SC[conformation_dotplot + "_BP"][(i, j)] = accuracy_request
+		if i not in self.SC[conformation_dotplot + "_SS"]: # Case of info for position i have not been collected yet.	
+			self.SC[conformation_dotplot + "_SS"][i] = (accuracy_request, None)
+			self.SC[conformation_dotplot + "_BP"][(i, j)] = accuracy_request
 			
 		else: # Case of some info for position i have already been allocated
-			accur_i, access_i = SC[conformation_dotplot+"_SS"][i]
+			accur_i, access_i = self.SC[conformation_dotplot+"_SS"][i]
 			if accur_i != None and access_i != None:
 				if accur_i + accuracy_request > 1:
-					print "StructureFeatureRequestError: Requested Accuracy exceeds limit of 1 and is not permitted to be added."
-					exit(1)
+					self.error = "StructureFeatureRequestError: Requested Accuracy exceeds limit of 1 and is not permitted to be added."
 				if 1 - (accuracy_request + accur_i) < access_i:
-					print "StructureFeatureRequestError: Requested Accuracy undermines a constrained accessibility"
-					exit(1) 
-				SC[conformation_dotplot+"_SS"][i] = (accur_i + accuracy_request , access_i)
-				SC[conformation_dotplot + "_BP"][(i, j)] = accuracy_request	
+					self.error = "StructureFeatureRequestError: Requested Accuracy undermines a constrained accessibility"
+				self.SC[conformation_dotplot+"_SS"][i] = (accur_i + accuracy_request , access_i)
+				self.SC[conformation_dotplot + "_BP"][(i, j)] = accuracy_request	
 			elif accur_i != None and access_i == None:
 				if accur_i + accuracy_request > 1:
-					print "StructureFeatureRequestError: Requested Accuracy exceeds limit of 1 and is not permitted to be added."
-					exit(1)
-				SC[conformation_dotplot+"_SS"][i] = (accur_i + accuracy_request , access_i)
-				SC[conformation_dotplot + "_BP"][(i, j)] = accuracy_request
+					self.error = "StructureFeatureRequestError: Requested Accuracy exceeds limit of 1 and is not permitted to be added."
+				self.SC[conformation_dotplot+"_SS"][i] = (accur_i + accuracy_request , access_i)
+				self.SC[conformation_dotplot + "_BP"][(i, j)] = accuracy_request
 			
 			elif accur_i == None and access_i != None:
 				if 1 - accuracy_request < access_i:
-					print "StructureFeatureRequestError: Requested Accuracy undermines a constrained accessibility"
-					exit(1) 
-				SC[conformation_dotplot+"_SS"][i] = (accuracy_request , access_i)
-				SC[conformation_dotplot + "_BP"][(i, j)] = accuracy_request
+					self.error = "StructureFeatureRequestError: Requested Accuracy undermines a constrained accessibility"
+				self.SC[conformation_dotplot+"_SS"][i] = (accuracy_request , access_i)
+				self.SC[conformation_dotplot + "_BP"][(i, j)] = accuracy_request
 
 		# CASE OF j
-		if j not in SC[conformation_dotplot + "_SS"]: # Case of info for position i have not been collected yet.	
-			SC[conformation_dotplot + "_SS"][j] = (accuracy_request, None)
-			SC[conformation_dotplot + "_BP"][(j, i)] = accuracy_request
+		if j not in self.SC[conformation_dotplot + "_SS"]: # Case of info for position i have not been collected yet.	
+			self.SC[conformation_dotplot + "_SS"][j] = (accuracy_request, None)
+			self.SC[conformation_dotplot + "_BP"][(j, i)] = accuracy_request
 			
 		else: # Case of some info for position i have already been allocated
 			accur_j, access_j = SC[conformation_dotplot+"_SS"][j]
 			if accur_j != None and access_j != None:
 				if accur_j + accuracy_request > 1:
-					print "StructureFeatureRequestError: Requested Accuracy exceeds limit of 1 and is not permitted to be added."
-					exit(1)
+					self.error = "StructureFeatureRequestError: Requested Accuracy exceeds limit of 1 and is not permitted to be added."
 				if 1 - (accuracy_request + accur_j) < access_j:
-					print "StructureFeatureRequestError: Requested Accuracy undermines a constrained accessibility"
-					exit(1) 
-				SC[conformation_dotplot+"_SS"][j] = (accur_j + accuracy_request , access_j)
-				SC[conformation_dotplot + "_BP"][(j, i)] = accuracy_request
+					self.error = "StructureFeatureRequestError: Requested Accuracy undermines a constrained accessibility"
+				self.SC[conformation_dotplot+"_SS"][j] = (accur_j + accuracy_request , access_j)
+				Sself.C[conformation_dotplot + "_BP"][(j, i)] = accuracy_request
 					
 			elif accur_j != None:
 				if accur_j + accuracy_request > 1:
-					print "StructureFeatureRequestError: Requested Accuracy exceeds limit of 1 and is not permitted to be added."
-					exit(1)
-				SC[conformation_dotplot+"_SS"][j] = (accur_j + accuracy_request , access_j)
-				SC[conformation_dotplot + "_BP"][(j, i)] = accuracy_request
+					self.error = "StructureFeatureRequestError: Requested Accuracy exceeds limit of 1 and is not permitted to be added."
+				self.SC[conformation_dotplot+"_SS"][j] = (accur_j + accuracy_request , access_j)
+				self.SC[conformation_dotplot + "_BP"][(j, i)] = accuracy_request
 				
 			elif access_j != None:
 				if (1 - accuracy_request) < access_j:
-					print "StructureFeatureRequestError: Requested Accuracy undermines a constrained accessibility"
-					exit(1) 
-				SC[conformation_dotplot+"_SS"][j] = (accuracy_request , access_j)
-				SC[conformation_dotplot + "_BP"][(j, i)] = accuracy_request
+					self.error = "StructureFeatureRequestError: Requested Accuracy undermines a constrained accessibility"
+				self.SC[conformation_dotplot+"_SS"][j] = (accuracy_request , access_j)
+				self.SC[conformation_dotplot + "_BP"][(j, i)] = accuracy_request
 		
 	def check(self):
 		"""
@@ -2604,8 +2591,7 @@ class Variables:
 
 		self.print_to_STDOUT = (self.output_file == "STDOUT")
 
-
-		if self.mode == "MFE":
+		if self.modus == "MFE":
 			if self.Cseq is None:
 				self.Cseq = "N" * len(self.Cstr)
 
@@ -2671,67 +2657,354 @@ class Variables:
 			if self.error == "0":
 				self.checkConstaintCompatibility()
 		
-		elif self.mode = "DP":
-			print "Access", args.accessibility
-			print "Accur", args.accuracy
-			print "Diff_access", args.Diff_accessibility
-			print "Diff_accur", args.Diff_accuracy
+		elif self.modus == "DP":
+			# print "Access", self.accessibility
+			# print "Accur", self.accuracy 
+			# print "Diff_access", self.diff_accessibility 
+			# print "Diff_accur", self.diff_accuracy 
 			
 			structurefeature_check = 0
 			
-			args.length = None
-			if "accessibility" in vars(args):
-				if args.length == None and args.accessibility != None:
-					args.length = len(args.accessibility[0][0])
-					
-				#accessibilities = args.accessibility
-				args.accessibility = check_Accessibilities(args.accessibility, args.length)
-				if type(args.accessibility) == list:
-					structurefeature_check += 1
-				#print "Access", args.accessibility
+			self.length = None
+			if self.accessibility:
+				if self.length == None:
+					self.length = len(self.accessibility[0][0])
+				self.check_Accessibilities()
+				structurefeature_check += 1
 				
-			if "accuracy" in vars(args):
-				if args.length == None and args.accuracy != None:
-					args.length = len(args.accuracy[0][0])
-				#accuracies = args.accuracy
-				args.accuracy = check_Accuracies(args.accuracy, args.length)
-				if type(args.accuracy) == list:
-					structurefeature_check += 1
-				#print "ACCUR",args.accuracy
+			if self.accuracy:
+				if self.length == None:
+					self.length = len(self.accuracy[0][0])
+				self.check_Accuracies()
+				structurefeature_check += 1
 				
-			if "Diff_accessibility" in (args):
-				if args.length == None and args.Diff_accessibility != None:
-					args.length = len(args.Diff_accessibility[0][0])
-				#accessibilities = args.accessibility
-				args.Diff_accessibility = check_Diff_Accessibilities(args.Diff_accessibility, args.length)
-				if type(args.Diff_accessibility) == list:
-					structurefeature_check += 1
-				#print "DiffAccess", args.Diff_accessibility
-				
-			if "Diff_accuracy" in vars(args):
-				if args.length == None and args.Diff_accuracy != None:
-					args.length = len(args.Diff_accuracy[0][0])
-				#accuracies = args.accuracy
-				print args.Diff_accuracy
-				args.Diff_accuracy = check_Diff_Accuracies(args.Diff_accuracy, args.length)
-				if type(args.Diff_accuracy) == list:
-					structurefeature_check += 1
-				#print "DiffACCUR",args.Diff_accuracy
-			#print structurefeature_check
+			if self.diff_accessibility:
+				if self.length == None:
+					self.length = len(self.diff_accessibility[0][0])
+				self.check_diff_Accessibilities()
+				structurefeature_check += 1
+								
+			if self.diff_accuracy:
+				if self.length == None:
+					self.length = len(self.diff_accuracy[0][0])
+				self.check_diff_Accuracies()
+				structurefeature_check += 1
+
 			if structurefeature_check == 0:
-				print "No structure constraint defined. Please define structural elements by using the accuracy of structure elements (basepairs) and accessibility of sequence stretches."
-				exit(1)
+				self.error = "No structure constraint defined. Please define structural elements by using the accuracy of structure elements (basepairs) and accessibility of sequence stretches."
 			else:
-				#print args
-				if args.Cseq == None:
-					args.Cseq = args.length * "N"
-				transform(args)
 				
-				parse_StructureFeatures(args)
-				getPostionalInterconnection(args)
-				getPositionFeatures(args)
+				if self.Cseq == None:
+					self.Cseq = self.length * "N"
+				
+				self.parse_GC_management()
+
+				
+				if self.error == "0":
+					self.parseExtendedVariables()
+				if self.error == "0":
+					self.checkSequenceConstraint()
+				if self.error == "0":
+					self.parse_StructureFeatures()
+				if self. error == "0":
+					self.checkPostionalInterconnection()
+				if self. error == "0":
+					self.getPositionFeatures()
 
 
+
+	def checkPostionalInterconnection(self):
+		"""
+			Extract the interconnection information based on the accuracy constraints
+			and the sequence constraint.
+		"""
+		all_requested_BP = []
+		if self.accur:
+			for accur in self.accur:
+				for i in accur[0]:
+					if (i, accur[0][i]) not in all_requested_BP:
+						all_requested_BP.append((i, accur[0][i]))
+					if (accur[0][i], i) not in all_requested_BP:
+						all_requested_BP.append((accur[0][i], i))
+		if self.diffaccur:
+			for diffaccur in self.diffaccur:
+				for i in diffaccur[0]:
+					if (i, diffaccur[0][i]) not in all_requested_BP:
+						all_requested_BP.append((i, diffaccur[0][i]))
+					if (diffaccur[0][i], i) not in all_requested_BP:
+						all_requested_BP.append((diffaccur[0][i], i))
+
+		self.interconnections = {}
+		self.BPstack = {}
+
+		for i, j in all_requested_BP:
+			jj = (j, "".join(set(self.IUPAC[self.Cseq[j-1]])))
+			
+			if i not in self.interconnections:
+				self.interconnections[i] = [self.IUPAC[self.Cseq[i-1]], jj]
+			else:
+				self.interconnections[i].append(jj)
+				
+		to_be_visited = self.interconnections.keys()
+
+		#print "Basis"
+		#for i in tmp_intercon.keys():
+			#print i, tmp_intercon[i]
+
+		#print "\nSorted Basis"
+		#index = sorted(self.interconnections,key=lambda k: len(self.interconnections[k][0]))
+		#for i in index:
+			#print i, self.interconnections[i]
+
+		while len(to_be_visited) != 0:
+			i = 0
+			index = sorted(self.interconnections,key=lambda k: len(self.interconnections[k][0]))[i]
+			while index not in to_be_visited:
+				i += 1
+				index = sorted(self.interconnections,key=lambda k: len(self.interconnections[k][0]))[i]
+				
+			#print "Index", index
+			#ind = sorted(tmp_intercon,key=lambda k: len(tmp_intercon[k][0]))
+			#for i in ind:
+				#print i, tmp_intercon[i]
+			#print "Index",index, tmp_intercon[index]
+			#print [ self.IUPAC_reverseComplements[n] for n in self.interconnections[index][0]]
+			new_nucs = "".join(set("".join([ self.IUPAC_reverseComplements[n] for n in self.interconnections[index][0]])))
+			#print "->", new_nucs , "<-"
+			
+			
+			for target_index in xrange(1, len(self.interconnections[index])):
+				new_i, nucleotides = self.interconnections[index][target_index]
+				if new_i in to_be_visited:
+					if compareLists(new_nucs, self.interconnections[new_i][0]):
+						self.interconnections[new_i][0] = new_nucs
+						for ii in self.interconnections.keys():
+							for id_new in xrange(1, len(self.interconnections[ii])):
+								#print ii, id_new, self.interconnections[ii][id_new]
+								if self.interconnections[ii][id_new][0] == new_i:
+									#print self.interconnections[ii][id_new][1], new_nucs
+									self.interconnections[ii][id_new] = (self.interconnections[ii][id_new][0], new_nucs)
+						
+			to_be_visited.pop(to_be_visited.index(index))
+			
+
+
+		self.Interconnection_sets = []
+		for i in self.interconnections:
+			indices_pre = []
+			L_pre = 0
+			indices_post = [int(i)]
+			L_post = len(indices_post) 
+			o = 0
+			while L_pre != L_post:
+				for ii in indices_post:
+					#print ii
+					if int(ii) not in indices_pre:
+						indices_pre.append(int(ii))
+					for j in xrange(1, len(self.interconnections[ii])):
+						if int(self.interconnections[ii][j][0]) not in indices_pre:
+							indices_pre.append(int(self.interconnections[ii][j][0]))
+				L_pre = len(indices_pre)
+				L_post = len(indices_post) 
+				indices_post = indices_pre
+				indices_pre = []
+			s = set(indices_post)
+			if s not in self.Interconnection_sets:
+				self.Interconnection_sets.append(s)
+				
+		#print self.Interconnection_sets
+		#print "here"
+
+	def getPositionFeatures(self):
+		"""
+			Extracts for each position within the system, which constraint has 
+			been posed to that very position. According to this setup, for each 
+			position can be asked if it was important to the solution.
+		"""
+		
+		### OPTION:
+		### Make unconstrained positions as if they had been considered accessible
+		self.PosFeatures = {}
+		for i in xrange(1,len(self.Cseq)+1):	
+			self.PosFeatures[i] = {"UB":[], "B":[]}
+			
+		#for i in args.PosFeatures.keys():
+			#print i, args.PosFeatures[i]
+		if self.accur:	
+			for elements in self.accur:
+				#print elements
+				for entry_key in elements[0].keys():
+					#print entry_key,
+					entry_val = elements[0][entry_key]
+					#print entry_val
+					#if elements[1] in args.PosFeatures[entry_key]:
+					self.PosFeatures[entry_key][elements[1]].append(("Accu", entry_val,  elements[2]))
+					#else:	
+						#args.PosFeatures[entry_key][elements[1]] = [("Accu", entry_val,  elements[2])]
+		
+		if self.access:
+			for elements in self.access:
+				for entry_key in elements[0].keys():
+					#if elements[1] in args.PosFeatures[entry_key]:
+					self.PosFeatures[entry_key][elements[1]].append(("Accs", entry_key, elements[2]))
+					#else:
+						#args.PosFeatures[entry_key][elements[1]] = [("Accs", entry_key, elements[2])]
+		
+		if self.diffaccur:
+			for elements in self.diffaccur:
+				for entry_key in elements[0].keys():
+					entry_val = elements[0][entry_key]
+					#if elements[1] in args.PosFeatures[entry_key]:
+					self.PosFeatures[entry_key][elements[1]].append(("Accu", entry_val, elements[2]))
+					#else:
+						#args.PosFeatures[entry_key][elements[1]] = [("Accu", entry_val, elements[2])]
+						
+					#if elements[3] in args.PosFeatures[entry_key]:
+					self.PosFeatures[entry_key][elements[3]].append(("Accu", entry_val, elements[4]))
+					#else:
+						#args.PosFeatures[entry_key][elements[3]] = [("Accu", entry_val, elements[4])]
+										
+				
+		if self.diffaccess:
+			for elements in self.diffaccess:
+				for entry_key in elements[0].keys():
+					#if elements[1] in args.PosFeatures[entry_key]:
+					self.PosFeatures[entry_key][elements[1]].append(("Accs", entry_key, elements[2]))
+					#else:
+						#args.PosFeatures[entry_key][elements[1]] = [("Accs", entry_key, elements[2])]
+						
+					#if elements[3] in args.PosFeatures[entry_key]:
+					self.PosFeatures[entry_key][elements[3]].append(("Accs", entry_key, elements[4]))
+					#else:
+						#args.PosFeatures[entry_key][elements[3]] = [("Accs", entry_key, elements[4])]
+				
+		#for i in args.PosFeatures.keys():
+			#print i, args.PosFeatures[i]
+		#exit(1)
+	
+
+	def parse_StructureFeatures(self):
+		"""
+			Parse the structure features, such that each base, resp. base pair can
+			only have a maximum shared probability of 1 in each dotplot.
+			Only produce a [B]ound dotplot, if the -Cstr argument is present and 
+			if differential structure features or structure features within 
+			the [B]ound dotplot are mentioned
+		"""
+		
+		# Lists of the nucleotide positions, each position is allowed to have a 
+		# maximum probability of one to be paired and a probability of being 
+		# unpaired (1-x).	
+		self.SC = {"B_BP":{}, "UB_BP":{}, "B_SS":{}, "UB_SS":{}}
+		
+		# Check for each requested base pair or accessibility if each newly added 
+		# requested feature is compatible with the already inputed ones.
+		# Initially all positions are accessible. A structure requests lowers the resp. accessibility.
+		
+
+		# ACCESSIBILITY
+		self.access = []
+		if self.accessibility:
+			for request in self.accessibility:
+				struct_info = removePairedAndUndefined_From_bpstack(request[0] , getbpStack(len(request[0]) * ".") [0])
+				constraint_system = request[1]
+				value = request[2]
+				self.addAccessibilityRequest(struct_info, constraint_system, value)
+				self.access.append((struct_info, constraint_system, value))
+		del self.accessibility
+		if self.access:
+			print "self.access", self.access
+			
+		# DIFF_ACCESSIBILITY
+		self.diffaccess = []
+		if self.diff_accessibility:
+			for request in self.diff_accessibility:
+				struct_info = removePairedAndUndefined_From_bpstack(request[0] , getbpStack(len(request[0]) * ".") [0])
+				constraint_system_1 = request[1]
+				value_1 = request[2]
+				constraint_system_2 = request[3]
+				value_2 = request[4]
+				self. addDiffAccessibilityRequest(struct_info , constraint_system_1, value_1, constraint_system_2, value_2)
+				self.diffaccess.append((struct_info , constraint_system_1, value_1, constraint_system_2, value_2))
+		del self.diff_accessibility
+		if self.diffaccess:
+			print "self.diffaccess", self.diffaccess
+			
+			
+		self.accur = []
+		# CONSTRAINT STRUCTURE
+		if self.Cstr != "":
+			self.addAccuracyRequest(removeUnpairedFrom_bpstack(getbpStack(self.Cstr)[0]), "B", 1)
+			self.accur.append((removeUnpairedFrom_bpstack(getbpStack(self.Cstr)[0]), "B", 1))
+		# ACCURACY
+
+		if self.accuracy:
+			for request in self.accuracy:
+				struct_info = removeUnpairedFrom_bpstack(getbpStack(request[0])[0])
+				constraint_system_1 = request[1]
+				value_1 = request[2]
+				self.addAccuracyRequest(struct_info, constraint_system_1, value_1)
+				self.accur.append((struct_info, constraint_system_1, value_1))
+
+		del self.accuracy
+		if self.accur:
+			print "self.accur", self.accur
+		
+		# DIFF_ACCURACY
+		self.diffaccur = []
+		if self.diff_accuracy:
+			for request in self.diff_accuracy:
+				struct_info = removeUnpairedFrom_bpstack(getbpStack(request[0])[0])
+				constraint_system_1 = request[1]
+				value_1 = request[2]
+				constraint_system_2 = request[3]
+				value_2 = request[4]
+				self.addDiffAccuracyRequest(struct_info, constraint_system_1, value_1, constraint_system_2, value_2)
+				self.diffaccur.append((struct_info, constraint_system_1, value_1, constraint_system_2, value_2))
+		del self.diff_accuracy
+		if self.diffaccur:
+			print "self.diffaccur", self.diffaccur
+		
+		#print "\n\n"
+		#for i in args.SC:
+			#print i, args.SC[i]
+		
+		#exit(1)
+
+	def addAccuracyRequest(self, struct_info, constraint_system_1, value_1):
+		"""
+			Adds accuracy structure elements to the respective conformation dotplot.
+		"""
+		#print type(struct_info), type(constraint_system_1), type(value_1)
+		for i in struct_info:
+			j = struct_info[i]
+		 	self.checkAccuracyViolation(constraint_system_1, (i, j), value_1)
+			
+	def addDiffAccuracyRequest(self, request_index, conformation_dotplot_1, accuracy_request_1, conformation_dotplot_2, accuracy_request_2):
+		"""
+			Adds differential accuracy elements to both conformation dotplots
+		"""
+		for i in request_index:
+			j = request_index[i]
+			self.checkAccuracyViolation(conformation_dotplot_1, (i, j), accuracy_request_1)
+			self.checkAccuracyViolation(conformation_dotplot_2, (i, j), accuracy_request_2)
+		
+		
+	def addAccessibilityRequest(self, request_index, conformation_dotplot, accessibility_request):
+		"""
+			Adds accessibility  structure element to the respective conformation dotplot
+		"""
+		for i in request_index:
+			self.checkAccessibilityViolation(conformation_dotplot, i, accessibility_request)
+			
+	def addDiffAccessibilityRequest(self, request_index, conformation_dotplot_1, accessibility_request_1, conformation_dotplot_2, accessibility_request_2):
+		"""
+			Adds a differential accessibility to both conformation dotplots
+		"""
+		for i in request_index:
+			self.checkAccessibilityViolation(conformation_dotplot_1, i, accessibility_request_1)
+			self.checkAccessibilityViolation(conformation_dotplot_2, i, accessibility_request_2)
+	
 	def parseExtendedVariables(self):
 		if self.seed != "none":
 			random.seed(self.seed)
@@ -2759,13 +3032,7 @@ class Variables:
 		else: ## allowing the GU basepair
 			self.IUPAC_reverseComplements = {"A":"U", "C":"G", "G":"UC", "U":"AG", "R":"UC", "Y":"AG", "S":"UGC", "W":"UAG","K":"UCAG", "M":"UG", "B":"AGCU", "D":"AGCU", "H":"UGA", "V":"UGC", "N":"ACGU"}         
 		
-		for col in xrange(self.noOfColonies):
-			# Checking the kind of taget GC value should be used
-			self.GC = []
-			if len(self.tGC) == 1:
-				self.GC.append((getGCSamplingValue(self.tGC[0][0], self.tGCmax, self.tGCvar), self.tGC[0][1], self.tGC[0][2]))
-			else:
-				self.GC = self.tGC
+
 
 
 
@@ -2804,7 +3071,7 @@ class Variables:
 
 		if len(self.tGC) == 1 and type(self.tGC[0]) is float: # CASE Only one tGC value is defined, which needs to account for the whole terrain
 			tgc = self.tGC.pop()
-			self.tGC.append((tgc, 1, len(self.Cstr)))
+			self.tGC.append((tgc, 1, self.length))
 			
 		for t in self.tGC:
 			if len(t) != 3:
@@ -2812,27 +3079,23 @@ class Variables:
 				self.error = error
 
 		if self.error == "0":
-			check_set = set(range(1,len(self.Cstr) + 1))
+			check_set = set(range(1, self.length + 1))
 			curr_set = set()
 			for i, area in enumerate(self.tGC): # CHECK if the areas are consistent and do not show disconnectivity.
 				v, s1, s2 = area
 				if i < 0 or i > 1:
-					error = "Error: Chosen tGC > %s < not in range [0,1]" % (i)
-					self.error = error
+					self.error = "Error: Chosen tGC > %s < not in range [0,1]" % (i)
 
 				if self.error == "0":
 					tmp_set = set(range(int(s1), int(s2 + 1)))
 					if len(curr_set.intersection(tmp_set)) == 0:
 						curr_set = curr_set.union(tmp_set)
 					else: 
-						error = "Error: Double defined tGC declaration area sector detected. Nucleotide positions", ", ".join(str(e) for e in curr_set.intersection(tmp_set)), "show(s) redundant tGC declaration"
-						self.error = error
+						self.error = "Error: Double defined tGC declaration area sector detected. Nucleotide positions", ", ".join(str(e) for e in curr_set.intersection(tmp_set)), "show(s) redundant tGC declaration"
 
 		if self.error == "0":				
 			if len(curr_set.symmetric_difference(check_set)) != 0:
-				error = "Error: Undefined tGC area sectors detected. Nucleotide positions", ", ".join(str(e) for e in curr_set.symmetric_difference(check_set)), "is/are not covered."
-				self.error = error
-
+				self.error = "Error: Undefined tGC area sectors detected. Nucleotide positions", ", ".join(str(e) for e in curr_set.symmetric_difference(check_set)), "is/are not covered."
 		
 		for tgc in self.tGC: # CHECK if the specified GC values can be reached at all...
 			if self.error == "0":
@@ -2840,10 +3103,7 @@ class Variables:
 				tmp_sc = self.Cseq[start:stop + 1]
 				minGC, maxGC = self.reachableGC()
 				if v > maxGC or v < minGC:
-					error = "WARNING: Chosen target GC %s content is not reachable. The selected sequence constraint contradicts the tGC constraint value. Sequence Constraint allows tGC only to be in [%s,%s]" % (v, minGC, maxGC) 
-					self.error = error 
-
-
+					self.error = "WARNING: Chosen target GC %s content is not reachable. The selected sequence constraint contradicts the tGC constraint value. Sequence Constraint allows tGC only to be in [%s,%s]" % (v, minGC, maxGC) 
 
 	
 	##########################
