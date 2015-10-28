@@ -358,107 +358,6 @@ def getFeatureDistance(BPPMS, features):
 
 	
 	
-def checkRequests(Cstr_aptamer, Cstr, tGCs, measurables):
-	"""
-		Checking the constraints made in the input file.
-	
-	"""
-	Cstr_aptamer
-	Cstr
-	tGCs
-	measurables
-	
-	# length check
-	L = len(Cstr["Cstr_UB"])
-	if Cstr_aptamer != "":
-		if L != len(Cstr_aptamer):
-			print "Error: Length difference in the systems detected"
-			return False
-	if "Cstr_B" in Cstr:
-		if L != len(Cstr["Cstr_B"]):
-			print "Error: Length difference in the systems detected"
-			return False
-	for tgc in tGCs:
-		if L != len(tgc):
-			print "Error: Length difference in the systems detected"
-			return False
-	for m in measurables:
-		if L != len(m[0]):
-			print "Error: Length difference in the systems detected"
-			return False
-			
-	# GC area compatibility and completeness
-	GC = {}
-	for tgc in tGCs:
-		test_stack = removePairedAndUndefined_From_bpstack(tgc , getbpStack(len(tgc) * ".") [0])
-		for i in test_stack:
-			if i not in GC:
-				GC[i] = i
-			else:
-				print "Error: Overlapping GC definition areas."
-				return False
-	if L != len(GC):
-		print "Error:GC definition coverage is not complete."
-		return False
-		
-	return True
-			
-def extractRequests(data):
-	"""
-		Parsing the constraints made in the input file.
-	"""
-	Cstr_aptamer = "" # constraint structure for the induced folding situation of aptamers
-	Cstr = {} # list of structures which should be present in the end a.k.a. the actually wanted structures
-	measurables = []
-	tGCs = {}
-	for i, line in enumerate(data):
-		line = line.strip("\n").split(" ")
-		if line[1] == "Cstr_UB": # LABEL Cstr_UB: stretch of structure, label
-			#print "Cstr_UB"
-			try:
-				Cstr["Cstr_UB"] = line[0]
-			except:
-				print "Parsing of a Cstr_UB failed."
-				print line
-				exit(1)
-				
-		elif line[1] == "Cstr_B": # LABEL Cstr_B: stretch of structure, label
-			#print "Cstr_B"
-			try:
-				Cstr["Cstr_B"] = line[0]
-			except:
-				print "Parsing of a Cstr_B failed."
-				print line
-				exit(1)
-			
-		elif line[1] == "access" or line[1] == "accuracy": # LABEL access or accuracy: stretch of structure, label, constraint system, optimization type
-			#print "access/accuracy"
-			try:
-				measurables.append( (line[0], line[2], line[1], line[3]) )
-			except:
-				print "Parsing of an accuracy or accessibility measurable failed."
-				print line
-				exit(1)
-
-		elif line[1] == "Cstr_A": # LABEL Cstr_A: stretch of structure of the aptamer constraint system, label
-			#print "Cstr_A"
-			try:
-				Cstr_aptamer = line[0]
-			except:
-				print "Parsing of an aptamer structure failed."
-				print line
-				exit(1)
-				
-		elif line[1] == "tGC": # LABEL tGC: stretch of structure, label, value
-			#print "tGC"
-			try:
-				tGCs[line[0]] = float(line[2])
-			except:
-				print "Parsing of a tGC definition failed."
-				print line
-				exit(1)
-
-	return Cstr_aptamer, Cstr, tGCs, measurables
 ############################################
 # IUPAC LOADINGS AND NUCLEOTIDE MANAGEMENT
 ############################################
@@ -839,6 +738,7 @@ def applyGCcontributionPathAdjustment(pathlength, actGC, terrainelement):
 	lower = minimum
 	position , nts = terrainelement.split(".")
 	nt = nts[-1:]
+
 	if nt == "A" or nt == "U":
 		pathlength = pathlength * maprange( (0, 1) , (lower, upper), actGC[int(position)])
 	elif nt == "G" or nt == "C":
@@ -1693,7 +1593,18 @@ def getGCSamplingValue(GC, tGCmax, tGCvar):
 		while returnval <= 0:
 			returnval = float(numpy.random.normal(GC, tGCvar, 1))
 		return returnval
-	
+
+def setGC(args):
+	"""
+		checks the tGC situation and maps it to GC arguments
+	"""
+	args.GC = []
+	if len(args.tGC) == 1:
+		args.GC = [(getGCSamplingValue(args.tGC[0][0], args.tGCmax, args.tGCvar), args.tGC[0][1], args.tGC[0][2])]
+	else:
+		args.GC = args.tGC
+
+
 
 def exe():
 	"""
@@ -1788,13 +1699,13 @@ def exe():
 								default=None,
 								action='append'
 								)
-	DP_parser.add_argument("--Diff-accuracy", 
+	DP_parser.add_argument("--diff-accuracy", 
 								#help="Define an differential accuracy evaluation block.\n\n", 
 								type=DiffAccuracyFeature,
 								default=None,
 								action='append'
 								)
-	DP_parser.add_argument("--Diff-accessibility", 
+	DP_parser.add_argument("--diff-accessibility", 
 								help="Define an differential accessibility evaluation block.\n\n", 
 								type=DiffAccessibilityFeature,
 								default=None,
@@ -2010,15 +1921,9 @@ class AntHill:
 
 			start_time = time.time()
 
+			setGC(self.params)
 
-			self.params.GC = []
-			if len(self.params.tGC) == 1:
-				self.params.GC = [(getGCSamplingValue(self.params.tGC[0][0], self.params.tGCmax, self.params.tGCvar), self.params.tGC[0][1], self.params.tGC[0][2])]
-			else:
-				self.params.GC = self.params.tGC
-			print "before init"
 			initTerrain(self.params) 
-			print "before modification"
 			applyTerrainModification(self.params)
 
 			global_ant_count = 0
@@ -2051,11 +1956,12 @@ class AntHill:
 			
 			
 			# IN CASE OF LP-MANAGEMENT
-			if self.params.noLBPmanagement:
-				if len(self.params.LP) > 0 :
-					for lp in self.params.LP:
-						self.params.Cstr = substr(lp + 1, self.params.Cstr, ".")
-						self.params.Cstr = substr(self.params.LP[lp] + 1, self.params.Cstr, ".")
+			if self.params.modus == "MFE":
+				if self.params.noLBPmanagement:
+					if len(self.params.LP) > 0 :
+						for lp in self.params.LP:
+							self.params.Cstr = substr(lp + 1, self.params.Cstr, ".")
+							self.params.Cstr = substr(self.params.LP[lp] + 1, self.params.Cstr, ".")
 
 			init = 1
 			used_time = getUsedTime(start_time)
@@ -2160,14 +2066,16 @@ class AntHill:
 				
 			duration  = used_time
 			self.tmp_sequence = best_solution[0]
-			self.tmp_structure = best_solution[1]	
+			if self.params.modus == "MFE":
+				self.tmp_structure = best_solution[1]	
 			self.tmp_stats.append("Ants:" + str(global_ant_count))
 			self.tmp_stats.append("Resets:" + str(resets) + "/" + str(self.params.Resets))
 			self.tmp_stats.append("AntsTC:" + str(self.params.antsTerConv))
 			self.tmp_stats.append("CC:" + str(self.params.ConvergenceCount)) 
 			self.tmp_stats.append("IP:" + str(self.params.improve_procedure)) 
 			self.tmp_stats.append("BSS:" + str(best_solution_since))
-			self.tmp_stats.append("LP:" + str(len(self.params.LP)))
+			if self.params.LP:
+				self.tmp_stats.append("LP:" + str(len(self.params.LP)))
 			self.tmp_stats.append("ds:" + str(best_solution[3]))
 			#self.tmp_stats.append("ds:" + str(getStructuralDistance(self.params, sequence, RNAfold, RNAfold_pattern)))
 			self.tmp_stats.append("dGC:" + str(best_solution[4]))
@@ -2177,9 +2085,6 @@ class AntHill:
 			self.tmp_stats.append("L:" + str(len(self.tmp_sequence)))
 			self.tmp_stats.append("Time:" + str(duration))
 
-	
-			
-			
 			self.retrieveResult(n)
 			
 			
@@ -2206,7 +2111,8 @@ class AntHill:
 				GC_out += str(s1) + "-" + str(s2) + ">" + str(v) + ";"
 			GC_out = GC_out[:-1]
 			
-			self.tmp_result.append("Cstr:" + self.params.Cstr)
+			if self.params.Cstr:
+				self.tmp_result.append("Cstr:" + self.params.Cstr)
 			self.tmp_result.append("Cseq:" + self.params.Cseq)
 			self.tmp_result.append("Alpha:" + str(self.params.alpha))
 			self.tmp_result.append("Beta:" + str(self.params.beta))
@@ -2216,10 +2122,12 @@ class AntHill:
 			self.tmp_result.append("GC_CT:" + str(self.params.Cgcweight))
 			self.tmp_result.append("Seq_CT:" + str(self.params.Cseqweight))
 			self.tmp_result.append("UsedProgram:" + self.params.usedProgram)
+			self.tmp_result.append("Modus:" + self.params.modus)
 			self.tmp_result.extend(self.tmp_stats)
 			
 			self.tmp_result.append("Rseq:" + self.tmp_sequence)
-			self.tmp_result.append("Rstr:" + self.tmp_structure)
+			if self.params.modus == "MFE":
+				self.tmp_result.append("Rstr:" + self.tmp_structure)
 
 		else:
 			self.tmp_result.append("Rseq:" + self.tmp_sequence)
@@ -2302,26 +2210,32 @@ class Variables:
 		
 
 	def readArgParseArguments(self, args):
-		self.modus = args.subparser.name
-		self.Cstr = args.Cstr
-		self.accuracy = args.accuracy
-		self.accessibility = args.accessibility
-		self.diff_accuracy = args.diff_accuracy
-		self.diff_accessibility = args.diff_accessibility
+		print args
+		self.modus = args.subparser_name
+		if self.modus == "MFE":
+			self.Cstr = args.Cstr
+			self.level = args.level
+			self.tGCmax = args.tGCmax
+			self.tGCvar = args.tGCvar
+			self.pseudoknots = args.pseudoknots
+			self.pkprogram = args.pkprogram
+			self.pkparameter = args.pkparameter
+			self.HotKnots_PATH = args.HotKnots_PATH
+			self.strategy = args.strategy
+		elif self.modus == "DP":
+			self.Cstr = args.Cstr
+			self.accuracy = args.accuracy
+			self.accessibility = args.accessibility
+			self.diff_accuracy = args.diff_accuracy
+			self.diff_accessibility = args.diff_accessibility
 		self.Cseq = args.Cseq
 		self.tGC = args.tGC
-		self.level = args.level
-		self.tGCmax = args.tGCmax
-		self.tGCvar = args.tGCvar
+		
 		self.temperature = args.temperature
 		self.paramFile = args.paramFile
 		self.noGUBasePair = args.noGUBasePair
 		self.noLBPmanagement = args.noLBPmanagement
-		self.pseudoknots = args.pseudoknots
-		self.pkprogram = args.pkprogram
-		self.pkparameter = args.pkparameter
-		self.HotKnots_PATH = args.HotKnots_PATH
-		self.strategy = args.strategy
+
 		self.noOfColonies = args.noOfColonies
 		self.output_file = args.output_file
 		self.py = args.py
@@ -2354,16 +2268,14 @@ class Variables:
 		"""
 		for c in self.Cseq:
 			if c not in "ACGURYSWKMBDHVNacgu": 
-				error = "Used Cseq -> %s <- is not a valid sequence constraint" % (c)
-				self.error = error
+				self.error = "Used Cseq -> %s <- is not a valid sequence constraint" % (c)
 	
 	def checkSimilarLength(self):
 		"""
 			Compares sequence and structure constraint length
 		"""
 		if len(self.Cstr) != len(self.Cseq):
-			error =  "Constraint have different lengths: Cstr: " + str(len(self.Cstr)) + ",Cseq: " + str(len(self.Cseq))
-			self.error = error
+			self.error =  "Constraint have different lengths: Cstr: " + str(len(self.Cstr)) + ",Cseq: " + str(len(self.Cseq))
 	
 	def isStructure(self):
 		"""
@@ -2372,8 +2284,7 @@ class Variables:
 		for a in range(0,len(self.Cstr)):
 			if self.Cstr[a] not in  ".()[]{}<>":
 				if self.Cstr[a] not in "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz":
-					error = "Specified structure is not a valid structure. Illegal characters detected: " + self.Cstr[a]
-					self.error = error 
+					self.error = "Specified structure is not a valid structure. Illegal characters detected: " + self.Cstr[a]
 
 	def isBalanced(self):
 		"""
@@ -2387,8 +2298,7 @@ class Variables:
 				elif self.Cstr[a] in bracket[1]:
 					counter -= 1
 			if counter != 0:
-				error = "Structure is not balanced."
-				self.error = error
+				self.error = "Structure is not balanced."
 
 	def fulfillsHairpinRule(self):
 		"""
@@ -2405,8 +2315,7 @@ class Variables:
 				elif self.Cstr[a] == bracket[1] and tmp_check == 1:
 					tmp_check = 0
 					if a - last_opening_char < 4:
-						error = "Hairpin loopsize rule violation"
-						self.error = error
+						self.error = "Hairpin loopsize rule violation"
 
 	def checkConstaintCompatibility(self):
 		"""
@@ -2418,8 +2327,7 @@ class Variables:
 			id2 = self.BPstack[id1][1][0]
 			constr2 = self.BPstack[id1][1][1]    
 			if id1 != id2 and not isCompatible(constr1, constr2, self.IUPAC_compatibles):
-				error = "Contraint Compatibility Issue: Nucleotide constraint " + str(constr1) + " at position " + str(id1) + " is not compatible with nucleotide constraint " + str(constr2) + " at position " + str(id2)
-				self.error = error
+				self.error = "Contraint Compatibility Issue: Nucleotide constraint " + str(constr1) + " at position " + str(id1) + " is not compatible with nucleotide constraint " + str(constr2) + " at position " + str(id2)
 
 	def transform(self):
 		"""
@@ -2511,9 +2419,9 @@ class Variables:
 				accur_i, access_i = self.SC[conformation_dotplot + "_SS"][i]
 				if 1-accur_i < accessibility_request:
 					self.error = "Requested accessibility exceeds an already made accuracy setting..."
-				SC[conformation_dotplot + "_SS"][i][1] = (accur_i, accessibility_request)
+				self.SC[conformation_dotplot + "_SS"][i][1] = (accur_i, accessibility_request)
 		else:
-			SC[conformation_dotplot + "_SS"][i] = (None, accessibility_request)
+			self.SC[conformation_dotplot + "_SS"][i] = (None, accessibility_request)
 			
 
 	def checkAccuracyViolation(self, conformation_dotplot, index, accuracy_request):
@@ -2563,14 +2471,14 @@ class Variables:
 			self.SC[conformation_dotplot + "_BP"][(j, i)] = accuracy_request
 			
 		else: # Case of some info for position i have already been allocated
-			accur_j, access_j = SC[conformation_dotplot+"_SS"][j]
+			accur_j, access_j = self.SC[conformation_dotplot+"_SS"][j]
 			if accur_j != None and access_j != None:
 				if accur_j + accuracy_request > 1:
 					self.error = "StructureFeatureRequestError: Requested Accuracy exceeds limit of 1 and is not permitted to be added."
 				if 1 - (accuracy_request + accur_j) < access_j:
 					self.error = "StructureFeatureRequestError: Requested Accuracy undermines a constrained accessibility"
 				self.SC[conformation_dotplot+"_SS"][j] = (accur_j + accuracy_request , access_j)
-				Sself.C[conformation_dotplot + "_BP"][(j, i)] = accuracy_request
+				self.SC[conformation_dotplot + "_BP"][(j, i)] = accuracy_request
 					
 			elif accur_j != None:
 				if accur_j + accuracy_request > 1:
@@ -2592,18 +2500,18 @@ class Variables:
 		self.print_to_STDOUT = (self.output_file == "STDOUT")
 
 		if self.modus == "MFE":
-			if self.Cseq is None:
-				self.Cseq = "N" * len(self.Cstr)
-
-			self.parse_GC_management()
 			self.length = len(self.Cstr)
+			if self.Cseq is None:
+				self.Cseq = "N" * self.length
+			self.parse_GC_management()
+			
 
 			self.checkForViennaTools()
 			self.usedProgram = "RNAfold"
 			if self.pseudoknots:
 				if self.pkprogram == "pKiss":
 					self.checkForpKiss()
-					if self.pkparameter == True:
+					if self.error == "0" and self.pkparameter == True:
 						self.alpha = 1.0
 						self.beta = 0.1
 						self.ER = 0.2 
@@ -2615,7 +2523,7 @@ class Variables:
 						self.usedProgram = "pKiss"
 				elif self.pkprogram == "HotKnots" and self.HotKnots_PATH != "":
 					self.checkForHotKnots(args)
-					if self.pkparameter == True:
+					if self.error == "0" and self.pkparameter == True:
 						self.alpha = 1.0
 						self.beta = 0.1
 						self.ER = 0.2 
@@ -2627,7 +2535,7 @@ class Variables:
 						self.usedProgram = "HotKnots"
 				elif self.pkprogram == "IPKnot":
 					self.checkForIPKnot()
-					if self.pkparameter == True:
+					if self.error == "0" and self.pkparameter == True:
 						self.alpha = 1.0
 						self.beta = 0.1
 						self.ER = 0.2 
@@ -2638,12 +2546,11 @@ class Variables:
 						self.ConvergenceCount = 100
 						self.usedProgram = "IPKnot"
 				else:
-					error = " Please choose a suitable pseudoknot predictor: [pKiss|Hotknots|IPKnot]"
-					self.error = error
-
+					self.error = " Please choose a suitable pseudoknot predictor: [pKiss|Hotknots|IPKnot]"
 					
 			# Constraint Checks and Parsing prior to Execution
-			self.checkSimilarLength()
+			if self.error == "0":
+				self.checkSimilarLength()
 			if self.error == "0":
 				self.isStructure()
 			if self.error == "0":	
@@ -2664,7 +2571,6 @@ class Variables:
 			# print "Diff_accur", self.diff_accuracy 
 			
 			structurefeature_check = 0
-			
 			self.length = None
 			if self.accessibility:
 				if self.length == None:
@@ -2696,10 +2602,8 @@ class Variables:
 				
 				if self.Cseq == None:
 					self.Cseq = self.length * "N"
-				
-				self.parse_GC_management()
-
-				
+				if self.error == "0":
+					self.parse_GC_management()
 				if self.error == "0":
 					self.parseExtendedVariables()
 				if self.error == "0":
@@ -2707,37 +2611,44 @@ class Variables:
 				if self.error == "0":
 					self.parse_StructureFeatures()
 				if self. error == "0":
-					self.checkPostionalInterconnection()
+					self.checkInterconnections()
 				if self. error == "0":
 					self.getPositionFeatures()
 
 
 
-	def checkPostionalInterconnection(self):
+	def retrieveAllBasePairs(self):
+		"""
+			Extracts all base pairs from all made accuracy/diff_accuracy constrianits present.
+
+		"""
+
+
+		self.all_requested_BP = []
+		if self.accur:
+			for accur in self.accur:
+				for i in accur[0]:
+					if (i, accur[0][i]) not in self.all_requested_BP:
+						self.all_requested_BP.append((i, accur[0][i]))
+					if (accur[0][i], i) not in self.all_requested_BP:
+						self.all_requested_BP.append((accur[0][i], i))
+		if self.diffaccur:
+			for diffaccur in self.diffaccur:
+				for i in diffaccur[0]:
+					if (i, diffaccur[0][i]) not in self.all_requested_BP:
+						self.all_requested_BP.append((i, diffaccur[0][i]))
+					if (diffaccur[0][i], i) not in self.all_requested_BP:
+						self.all_requested_BP.append((diffaccur[0][i], i))
+
+	def retrievePositionalInterconnection(self):
 		"""
 			Extract the interconnection information based on the accuracy constraints
 			and the sequence constraint.
 		"""
-		all_requested_BP = []
-		if self.accur:
-			for accur in self.accur:
-				for i in accur[0]:
-					if (i, accur[0][i]) not in all_requested_BP:
-						all_requested_BP.append((i, accur[0][i]))
-					if (accur[0][i], i) not in all_requested_BP:
-						all_requested_BP.append((accur[0][i], i))
-		if self.diffaccur:
-			for diffaccur in self.diffaccur:
-				for i in diffaccur[0]:
-					if (i, diffaccur[0][i]) not in all_requested_BP:
-						all_requested_BP.append((i, diffaccur[0][i]))
-					if (diffaccur[0][i], i) not in all_requested_BP:
-						all_requested_BP.append((diffaccur[0][i], i))
-
 		self.interconnections = {}
 		self.BPstack = {}
-
-		for i, j in all_requested_BP:
+		self.LP = {}
+		for i, j in self.all_requested_BP:
 			jj = (j, "".join(set(self.IUPAC[self.Cseq[j-1]])))
 			
 			if i not in self.interconnections:
@@ -2786,8 +2697,6 @@ class Variables:
 									self.interconnections[ii][id_new] = (self.interconnections[ii][id_new][0], new_nucs)
 						
 			to_be_visited.pop(to_be_visited.index(index))
-			
-
 
 		self.Interconnection_sets = []
 		for i in self.interconnections:
@@ -2798,7 +2707,6 @@ class Variables:
 			o = 0
 			while L_pre != L_post:
 				for ii in indices_post:
-					#print ii
 					if int(ii) not in indices_pre:
 						indices_pre.append(int(ii))
 					for j in xrange(1, len(self.interconnections[ii])):
@@ -2812,8 +2720,105 @@ class Variables:
 			if s not in self.Interconnection_sets:
 				self.Interconnection_sets.append(s)
 				
-		#print self.Interconnection_sets
-		#print "here"
+
+	def getNeighborVertices(self, v_i, graph):
+		"""
+		Extract the neighbors of vertex v_i from graph 
+		"""
+		v = []
+		for g in graph:
+			vi, vj = g
+			if vi == v_i:
+				v.append(vj)
+			elif vj == v_i:
+				v.append(vi)
+		return v
+
+
+	def detect_circles(self):
+		"""
+			Detects cyrcles in secondary structure construct definitions, which have been preparsed into interconnections previously.
+			Allows even sized cycles.
+		"""
+
+		for interconnection in self.Interconnection_sets:
+			# print interconnection
+			unvisited = interconnection.copy()
+			graph = []
+			for arc in self.all_requested_BP:
+				if arc[0] in interconnection and arc[0] < arc[1]:
+					graph.append([arc[0], arc[1]])
+
+			no_cycle = True
+			not_checked = True
+			visited = set([])
+			cycle_length = 0
+			the_stack = []
+			backended = []
+			v_i = unvisited.pop()
+			visited.add(v_i)
+			the_stack.append(v_i)
+			came_from = ""
+			while no_cycle and not_checked:
+				vertices = self.getNeighborVertices(v_i, graph)
+				visitable_vertices = set(vertices) - set(visited)
+				# print "vi", v_i, visited, unvisited, the_stack, vertices
+				if len(vertices) > 1:
+					if set(backended) == set(vertices):
+						not_checked = False
+					else:
+						for v in vertices:
+							# print v
+							if v not in visited and v != came_from:
+							 	visited.add(v)
+							 	unvisited.remove(v)
+							 	the_stack.append(v)
+							 	came_from = v_i
+							 	v_i = v
+							 	break
+							elif v in visited and v != came_from:
+								no_cycle = False
+								cycle_length = (len(the_stack)) - the_stack.index(v)
+								print "The_stack One", the_stack
+								print cycle_length
+								break
+
+				else:
+					if vertices[0] in visited and vertices[0] != came_from: # ring closure case
+						# print "Singletone close",vertices[0]
+						no_cycle = False
+						cycle_length = (len(the_stack)) - the_stack.index(vertices[0] )
+						# print "The_stack Two", the_stack
+						# print cycle_length
+						
+					elif vertices[0] in visited and vertices[0] == came_from: # back end case
+						# print "Singletone backend",vertices[0]
+						the_stack.pop()
+						backended.append(v_i)
+						came_from = v_i
+						# print "delete", vertices[0]
+						# graph.pop(graph.index(vertices[0]))
+						v_i = the_stack[-1]
+
+					elif vertices[0] not in visited and vertices[0] != came_from: # starting from a vertex with just one neighbor
+					 	# print "Singletone", v_i
+					 	visited.add(vertices[0])
+					 	unvisited.remove(vertices[0])
+					 	the_stack.append(vertices[0])
+					 	came_from = v_i
+					 	v_i = vertices[0]
+
+			if no_cycle == False and cycle_length % 2 != 0:
+				self.error = "Found odd cycle on structure positions %s, of size %s" % (', '.join(str(e) for e in interconnection), cycle_length)
+			# elif not_checked == False:
+
+	def checkInterconnections(self):
+		
+
+		self.retrieveAllBasePairs()
+		self.retrievePositionalInterconnection()
+		self.detect_circles()
+
 
 	def getPositionFeatures(self):
 		"""
@@ -2825,7 +2830,7 @@ class Variables:
 		### OPTION:
 		### Make unconstrained positions as if they had been considered accessible
 		self.PosFeatures = {}
-		for i in xrange(1,len(self.Cseq)+1):	
+		for i in xrange(1,self.length+1):	
 			self.PosFeatures[i] = {"UB":[], "B":[]}
 			
 		#for i in args.PosFeatures.keys():
@@ -2878,10 +2883,6 @@ class Variables:
 					#else:
 						#args.PosFeatures[entry_key][elements[3]] = [("Accs", entry_key, elements[4])]
 				
-		#for i in args.PosFeatures.keys():
-			#print i, args.PosFeatures[i]
-		#exit(1)
-	
 
 	def parse_StructureFeatures(self):
 		"""
@@ -2911,7 +2912,7 @@ class Variables:
 				value = request[2]
 				self.addAccessibilityRequest(struct_info, constraint_system, value)
 				self.access.append((struct_info, constraint_system, value))
-		del self.accessibility
+		#del self.accessibility
 		if self.access:
 			print "self.access", self.access
 			
@@ -2926,14 +2927,14 @@ class Variables:
 				value_2 = request[4]
 				self. addDiffAccessibilityRequest(struct_info , constraint_system_1, value_1, constraint_system_2, value_2)
 				self.diffaccess.append((struct_info , constraint_system_1, value_1, constraint_system_2, value_2))
-		del self.diff_accessibility
+		#del self.diff_accessibility
 		if self.diffaccess:
 			print "self.diffaccess", self.diffaccess
 			
 			
 		self.accur = []
 		# CONSTRAINT STRUCTURE
-		if self.Cstr != "":
+		if self.Cstr != None:
 			self.addAccuracyRequest(removeUnpairedFrom_bpstack(getbpStack(self.Cstr)[0]), "B", 1)
 			self.accur.append((removeUnpairedFrom_bpstack(getbpStack(self.Cstr)[0]), "B", 1))
 		# ACCURACY
@@ -2946,7 +2947,7 @@ class Variables:
 				self.addAccuracyRequest(struct_info, constraint_system_1, value_1)
 				self.accur.append((struct_info, constraint_system_1, value_1))
 
-		del self.accuracy
+		#del self.accuracy
 		if self.accur:
 			print "self.accur", self.accur
 		
@@ -2961,7 +2962,7 @@ class Variables:
 				value_2 = request[4]
 				self.addDiffAccuracyRequest(struct_info, constraint_system_1, value_1, constraint_system_2, value_2)
 				self.diffaccur.append((struct_info, constraint_system_1, value_1, constraint_system_2, value_2))
-		del self.diff_accuracy
+		#del self.diff_accuracy
 		if self.diffaccur:
 			print "self.diffaccur", self.diffaccur
 		
@@ -3033,11 +3034,6 @@ class Variables:
 			self.IUPAC_reverseComplements = {"A":"U", "C":"G", "G":"UC", "U":"AG", "R":"UC", "Y":"AG", "S":"UGC", "W":"UAG","K":"UCAG", "M":"UG", "B":"AGCU", "D":"AGCU", "H":"UGA", "V":"UGC", "N":"ACGU"}         
 		
 
-
-
-
-		
-		
 	def reachableGC(self):
 		"""
 			Checks if a demanded GC target content is reachable in dependence with the given sequence constraint.
@@ -3050,7 +3046,7 @@ class Variables:
 			
 		"""
 
-		nucleotide_contribution = 1/float(len(self.Cseq)) 
+		nucleotide_contribution = 1/float(self.length) 
 		
 		minGC = 0.0
 		maxGC = 1.0
@@ -3064,7 +3060,7 @@ class Variables:
 					minGC += nucleotide_contribution
 				elif i == "W":#(A or T/U):
 					maxGC -= nucleotide_contribution
-		return (minGC, maxGC)	
+		return ('%.6f' % (minGC), '%.6f' % (maxGC))
 	
 	
 	def parse_GC_management(self):
@@ -3075,8 +3071,7 @@ class Variables:
 			
 		for t in self.tGC:
 			if len(t) != 3:
-				error = "Error :: Not enough tGC and affiliated areas declarations"
-				self.error = error
+				self.error = "Error :: Not enough tGC and affiliated areas declarations"
 
 		if self.error == "0":
 			check_set = set(range(1, self.length + 1))
@@ -3100,6 +3095,7 @@ class Variables:
 		for tgc in self.tGC: # CHECK if the specified GC values can be reached at all...
 			if self.error == "0":
 				v, start, stop = tgc
+				v = '%.6f' % (v)
 				tmp_sc = self.Cseq[start:stop + 1]
 				minGC, maxGC = self.reachableGC()
 				if v > maxGC or v < minGC:
@@ -3110,66 +3106,39 @@ class Variables:
 	# PROGRAM PRESENCE CHECK
 	##########################
 
-
-
 	def checkForViennaTools(self):
 		"""
 		Checking for the presence of the Vienna tools in the system by which'ing for RNAfold and RNAdistance
 		"""
 		RNAfold_output = subprocess.Popen(["which", "RNAfold"], stdout=subprocess.PIPE).communicate()[0].strip()
-		if len(RNAfold_output) > 0 and RNAfold_output.find("found") == -1 and RNAfold_output.find(" no ") == -1:
-			return True
-		else:
-			self.error = "No RNAfold found"
-			print "It seems the Vienna RNA Package is not installed on your machine. Please do so!"
-			print "You can get it at http://www.tbi.univie.ac.at/"
-			exit(0)
-
-		
+		if not (len(RNAfold_output) > 0 and RNAfold_output.find("found") == -1 and RNAfold_output.find(" no ") == -1):
+			self.error = "No RNAfold found\nIt seems the Vienna RNA Package is not installed on your machine. Please do so!\nYou can get it at http://www.tbi.univie.ac.at/"
+	
 	def checkForpKiss(self):
 		"""
 			Checking for the presence of pKiss
 		"""
 		pKiss_output = subprocess.Popen(["which", "pKiss_mfe"], stdout=subprocess.PIPE).communicate()[0].strip()
 		#pKiss_output = subprocess.Popen(["which", "/usr/local/pkiss/2014-03-17/bin/pKiss_mfe"], stdout=subprocess.PIPE).communicate()[0].strip()
-		if len(pKiss_output) > 0 and pKiss_output.find("found") == -1 and pKiss_output.find(" no ") == -1:
-			return True
-		else:
-			self.error = "No pKiss found"
-			print "It seems that pKiss is not installed on your machine. Please do so!"
-			print "You can get it at http://bibiserv2.cebitec.uni-bielefeld.de/pkiss"
-			exit(0)
+		if not (len(pKiss_output) > 0 and pKiss_output.find("found") == -1 and pKiss_output.find(" no ") == -1):
+			self.error = "No pKiss found\nIt seems that pKiss is not installed on your machine. Please do so!\nYou can get it at http://bibiserv2.cebitec.uni-bielefeld.de/pkiss"
 
 	def checkForIPKnot(self):
 		"""
 			Checking for the presence of IPKnot
 		"""
-		pKiss_output = subprocess.Popen(["which", "ipknot"], stdout=subprocess.PIPE).communicate()[0].strip()
-		if len(pKiss_output) > 0 and pKiss_output.find("found") == -1 and pKiss_output.find(" no ") == -1:
-			return True
-		else:
-			self.error = "No IPKnot"
-			print "It seems that IPKnot is not installed on your machine. Please do so!"
-			print "You can get it at http://rtips.dna.bio.keio.ac.jp/ipknot/"
-			exit(0)
+		IPKnot_output = subprocess.Popen(["which", "ipknot"], stdout=subprocess.PIPE).communicate()[0].strip()
+		if not (len(IPKnot_output) > 0 and IPKnot_output.find("found") == -1 and IPKnot_output.find(" no ") == -1):
+			self.error = "No IPKnot\nIt seems that IPKnot is not installed on your machine. Please do so!\nYou can get it at http://rtips.dna.bio.keio.ac.jp/ipknot/"
 
 	def checkForHotKnots(self):
 		"""
 			Checking for the presence of HotKnots
 		"""
 		cmd = self.HotKnots_PATH + "/HotKnots"
-		
-		#HotKnots_output = subprocess.Popen([cmd], stdout=subprocess.PIPE).communicate()[0].strip()
-		#if len(HotKnots_output) > 0 and HotKnots_output.find("found") == -1 and HotKnots_output.find(" no ") == -1:
-			#return True
-		
-		if os.path.exists(cmd):
-			return True
-		else:
-			self.error = "HotKnots"
-			print "It seems that HotKnots is not installed on your machine. Please do so!"
-			print "You can get it at http://www.cs.ubc.ca/labs/beta/Software/HotKnots/"
-			exit(0)
+		if not os.path.exists(cmd):
+			self.error = "HotKnots\nIt seems that HotKnots is not installed on your machine. Please do so!\nYou can get it at http://www.cs.ubc.ca/labs/beta/Software/HotKnots/"
+
 
 #########################
 # ENTRY TO THE ANT HIVE
