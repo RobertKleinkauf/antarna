@@ -63,4 +63,4 @@ When using antaRNA in your work, please cite antaRNA.
   - [antaRNA: ant colony-based RNA sequence
 design](http://bioinformatics.oxfordjournals.org/content/early/2015/06/24/bioinformatics.btv319.full.pdf+html).
  - R. Kleinkauf, T. Houwaart, R. Backofen and M. Mann, antaRNA – Multi-Objective Inverse Folding of Pseudoknot RNA using Ant-Colony Optimization 
-  - Submitted: Jul 2015
+  - Accepted in BMC Bioinformatics: Okt 2015
