@@ -1474,7 +1474,6 @@ class AntHill:
 				else:
 					print2file(self.params.output_file, "\n".join(self.tmp_result), 'a')
 		else:
-			print self.tmp_result
 			self.result.append(tuple(self.tmp_result))
 			
 			
@@ -1574,16 +1573,14 @@ class Variables:
 		"""
 		for c in self.Cseq:
 			if c not in "ACGURYSWKMBDHVNacgu": 
-				error = "Used Cseq -> %s <- is not a valid sequence constraint" % (c)
-				self.error = error
-	
+				self.error  = "Used Cseq -> %s <- is not a valid sequence constraint" % (c)
+
 	def checkSimilarLength(self):
 		"""
 			Compares sequence and structure constraint length
 		"""
 		if len(self.Cstr) != len(self.Cseq):
-			error =  "Constraint have different lengths: Cstr: " + str(len(self.Cstr)) + ",Cseq: " + str(len(self.Cseq))
-			self.error = error
+			self.error  =  "Constraint have different lengths: Cstr: " + str(len(self.Cstr)) + ",Cseq: " + str(len(self.Cseq))
 	
 	def isStructure(self):
 		"""
@@ -1592,8 +1589,7 @@ class Variables:
 		for a in range(0,len(self.Cstr)):
 			if self.Cstr[a] not in  ".()[]{}<>":
 				if self.Cstr[a] not in "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz":
-					error = "Specified structure is not a valid structure. Illegal characters detected: " + self.Cstr[a]
-					self.error = error 
+					self.error = "Specified structure is not a valid structure. Illegal characters detected: " + self.Cstr[a]
 
 	def isBalanced(self):
 		"""
@@ -1607,8 +1603,7 @@ class Variables:
 				elif self.Cstr[a] in bracket[1]:
 					counter -= 1
 			if counter != 0:
-				error = "Structure is not balanced."
-				self.error = error
+				self.error = "Structure is not balanced."
 
 	def fulfillsHairpinRule(self):
 		"""
@@ -1625,8 +1620,7 @@ class Variables:
 				elif self.Cstr[a] == bracket[1] and tmp_check == 1:
 					tmp_check = 0
 					if a - last_opening_char < 4:
-						error = "Hairpin loopsize rule violation"
-						self.error = error
+						self.error = "Hairpin loopsize rule violation"
 
 	def checkConstaintCompatibility(self):
 		"""
@@ -1638,8 +1632,8 @@ class Variables:
 			id2 = self.BPstack[id1][1][0]
 			constr2 = self.BPstack[id1][1][1]    
 			if id1 != id2 and not isCompatible(constr1, constr2, self.IUPAC_compatibles):
-				error = "Contraint Compatibility Issue: Nucleotide constraint " + str(constr1) + " at position " + str(id1) + " is not compatible with nucleotide constraint " + str(constr2) + " at position " + str(id2)
-				self.error = error
+				self.error = "Contraint Compatibility Issue: Nucleotide constraint " + str(constr1) + " at position " + str(id1) + " is not compatible with nucleotide constraint " + str(constr2) + " at position " + str(id2)
+				 
 
 	def transform(self):
 		"""
@@ -1658,60 +1652,61 @@ class Variables:
 
 	def check(self):
 		"""
-			CHECK THE COMMAND LINE STUFF
+			parse and check the amde Input. Raises errors in self.error, if something is wrong.
 		"""
 		self.print_to_STDOUT = (self.output_file == "STDOUT")
 		if self.Cseq == "":
 			self.Cseq = "N" * len(self.Cstr)
 
-		self.parse_GC_management()
-
-		self.checkForViennaTools()
-		self.usedProgram = "RNAfold"
-		if self.pseudoknots:
-			if self.pkprogram == "pKiss":
-				self.checkForpKiss()
-				if self.pkparameter == True:
-					self.alpha = 1.0
-					self.beta = 0.1
-					self.ER = 0.2 
-					self.Cstrweight = 0.1 
-					self.Cgcweight = 1.0 
-					self.Cseqweight = 0.5 
-					self.Cseqweight = 50 
-					self.ConvergenceCount = 100
-					self.usedProgram = "pKiss"
-			elif self.pkprogram == "HotKnots" and self.HotKnots_PATH != "":
-				self.checkForHotKnots(args)
-				if self.pkparameter == True:
-					self.alpha = 1.0
-					self.beta = 0.1
-					self.ER = 0.2 
-					self.Cstrweight = 0.1 
-					self.Cgcweight = 1.0 
-					self.Cseqweight = 0.5 
-					self.Cseqweight = 50 
-					self.ConvergenceCount = 100
-					self.usedProgram = "HotKnots"
-			elif self.pkprogram == "IPKnot":
-				self.checkForIPKnot()
-				if self.pkparameter == True:
-					self.alpha = 1.0
-					self.beta = 0.1
-					self.ER = 0.2 
-					self.Cstrweight = 0.1 
-					self.Cgcweight = 1.0 
-					self.Cseqweight = 0.5 
-					self.Cseqweight = 50 
-					self.ConvergenceCount = 100
-					self.usedProgram = "IPKnot"
-			else:
-				error = " Please choose a suitable pseudoknot predictor: [pKiss|Hotknots|IPKnot]"
-				self.error = error
-
+		if self.error == "0":
+			self.parse_GC_management()
+		if self.error == "0":
+			self.checkForViennaTools()
+		if self.error == "0":	
+			self.usedProgram = "RNAfold"
+			if self.pseudoknots:
+				if self.pkprogram == "pKiss":
+					self.checkForpKiss()
+					if self.pkparameter == True:
+						self.alpha = 1.0
+						self.beta = 0.1
+						self.ER = 0.2 
+						self.Cstrweight = 0.1 
+						self.Cgcweight = 1.0 
+						self.Cseqweight = 0.5 
+						self.Cseqweight = 50 
+						self.ConvergenceCount = 100
+						self.usedProgram = "pKiss"
+				elif self.pkprogram == "HotKnots" and self.HotKnots_PATH != "":
+					self.checkForHotKnots(args)
+					if self.pkparameter == True:
+						self.alpha = 1.0
+						self.beta = 0.1
+						self.ER = 0.2 
+						self.Cstrweight = 0.1 
+						self.Cgcweight = 1.0 
+						self.Cseqweight = 0.5 
+						self.Cseqweight = 50 
+						self.ConvergenceCount = 100
+						self.usedProgram = "HotKnots"
+				elif self.pkprogram == "IPKnot":
+					self.checkForIPKnot()
+					if self.pkparameter == True:
+						self.alpha = 1.0
+						self.beta = 0.1
+						self.ER = 0.2 
+						self.Cstrweight = 0.1 
+						self.Cgcweight = 1.0 
+						self.Cseqweight = 0.5 
+						self.Cseqweight = 50 
+						self.ConvergenceCount = 100
+						self.usedProgram = "IPKnot"
+				else:
+					self.error = " Please choose a suitable pseudoknot predictor: [pKiss|Hotknots|IPKnot]"
 				
 		# Constraint Checks and Parsing prior to Execution
-		self.checkSimilarLength()
+		if self.error == "0":
+			self.checkSimilarLength()
 		if self.error == "0":
 			self.isStructure()
 		if self.error == "0":	
@@ -1728,6 +1723,13 @@ class Variables:
 
 
 	def parseExtendedVariables(self):
+		"""
+			- Seed management
+			- folder management
+			- IUPAC management
+			- GC distribution management
+		"""
+
 		if self.seed != "none":
 			random.seed(self.seed)
 
@@ -1761,10 +1763,6 @@ class Variables:
 				self.GC.append((getGCSamplingValue(self.tGC[0][0], self.tGCmax, self.tGCvar), self.tGC[0][1], self.tGC[0][2]))
 			else:
 				self.GC = self.tGC
-
-
-
-		
 		
 	def reachableGC(self):
 		"""
@@ -1791,122 +1789,77 @@ class Variables:
 					minGC += nucleotide_contribution
 				elif i == "W":#(A or T/U):
 					maxGC -= nucleotide_contribution
-		return (minGC, maxGC)	
+		return ("%.6f" % (minGC), "%.6f" % (maxGC))
 	
 	
 	def parse_GC_management(self):
-
+		"""
+			Check and subsequently transfer made GC constraint specifications into further usable GC definitions.
+		"""
 		if len(self.tGC) == 1 and type(self.tGC[0]) is float: # CASE Only one tGC value is defined, which needs to account for the whole terrain
 			tgc = self.tGC.pop()
 			self.tGC.append((tgc, 1, len(self.Cstr)))
 			
 		for t in self.tGC:
 			if len(t) != 3:
-				error = "Error :: Not enough tGC and affiliated areas declarations"
-				self.error = error
-				print error
-				exit(1)
-				
+				self.error  = "Error :: Not enough tGC and affiliated areas declarations"
 		check_set = set(range(1,len(self.Cstr) + 1))
 		curr_set = set()
 		for i, area in enumerate(self.tGC): # CHECK if the areas are consistent and do not show disconnectivity.
 			v, s1, s2 = area
 			if i < 0 or i > 1:
-				error = "Error: Chosen tGC > %s < not in range [0,1]" % (i)
-				self.error = error
-				print error
-				exit(1)
+				self.error  = "Error: Chosen tGC > %s < not in range [0,1]" % (i)
 			tmp_set = set(range(int(s1), int(s2 + 1)))
 			if len(curr_set.intersection(tmp_set)) == 0:
 				curr_set = curr_set.union(tmp_set)
 			else: 
-				error = "Error: Double defined tGC declaration area sector detected. Nucleotide positions", ", ".join(str(e) for e in curr_set.intersection(tmp_set)), "show(s) redundant tGC declaration"
-				self.error = error
-				print error
-				exit(1)
-				
+				self.error  = "Error: Double defined tGC declaration area sector detected. Nucleotide positions", ", ".join(str(e) for e in curr_set.intersection(tmp_set)), "show(s) redundant tGC declaration"
 		if len(curr_set.symmetric_difference(check_set)) != 0:
-			error = "Error: Undefined tGC area sectors detected. Nucleotide positions", ", ".join(str(e) for e in curr_set.symmetric_difference(check_set)), "is/are not covered."
-			self.error = error
-			print error
-			exit(1)
-			
+			self.error  = "Error: Undefined tGC area sectors detected. Nucleotide positions", ", ".join(str(e) for e in curr_set.symmetric_difference(check_set)), "is/are not covered."
 		for tgc in self.tGC: # CHECK if the specified GC values can be reached at all...
 			v, start, stop = tgc
+			v = "%.6f" % (v)
 			tmp_sc = self.Cseq[start:stop + 1]
 			minGC, maxGC = self.reachableGC()
 			if v > maxGC or v < minGC:
-				error = "WARNING: Chosen target GC %s content is not reachable. The selected sequence constraint contradicts the tGC constraint value. Sequence Constraint allows tGC only to be in [%s,%s]" % (v, minGC, maxGC) 
-				self.error = error 
-				print >> sys.stderr, error
-				exit (1)
-
-
+				self.error  = "WARNING: Chosen target GC %s content is not reachable. The selected sequence constraint contradicts the tGC constraint value. Sequence Constraint allows tGC only to be in [%s,%s]" % (v, minGC, maxGC) 
 	
 	##########################
 	# PROGRAM PRESENCE CHECK
 	##########################
 
-
-
 	def checkForViennaTools(self):
 		"""
-		Checking for the presence of the Vienna tools in the system by which'ing for RNAfold and RNAdistance
+			Checking for the presence of the Vienna tools in the system by which'ing for RNAfold and RNAdistance
 		"""
 		RNAfold_output = subprocess.Popen(["which", "RNAfold"], stdout=subprocess.PIPE).communicate()[0].strip()
-		if len(RNAfold_output) > 0 and RNAfold_output.find("found") == -1 and RNAfold_output.find(" no ") == -1:
-			return True
-		else:
-			self.error = "No RNAfold found"
-			print "It seems the Vienna RNA Package is not installed on your machine. Please do so!"
-			print "You can get it at http://www.tbi.univie.ac.at/"
-			exit(0)
+		if not (len(RNAfold_output) > 0 and RNAfold_output.find("found") == -1 and RNAfold_output.find(" no ") == -1):
+			self.error = "No RNAfold found\nIt seems the Vienna RNA Package is not installed on your machine. Please do so!\nYou can get it at http://www.tbi.univie.ac.at/"
 
-		
 	def checkForpKiss(self):
 		"""
 			Checking for the presence of pKiss
 		"""
 		pKiss_output = subprocess.Popen(["which", "pKiss_mfe"], stdout=subprocess.PIPE).communicate()[0].strip()
 		#pKiss_output = subprocess.Popen(["which", "/usr/local/pkiss/2014-03-17/bin/pKiss_mfe"], stdout=subprocess.PIPE).communicate()[0].strip()
-		if len(pKiss_output) > 0 and pKiss_output.find("found") == -1 and pKiss_output.find(" no ") == -1:
-			return True
-		else:
-			self.error = "No pKiss found"
-			print "It seems that pKiss is not installed on your machine. Please do so!"
-			print "You can get it at http://bibiserv2.cebitec.uni-bielefeld.de/pkiss"
-			exit(0)
+		if not (len(pKiss_output) > 0 and pKiss_output.find("found") == -1 and pKiss_output.find(" no ") == -1):
+			self.error = "No pKiss found\nIt seems that pKiss is not installed on your machine. Please do so!\nYou can get it at http://bibiserv2.cebitec.uni-bielefeld.de/pkiss"
 
 	def checkForIPKnot(self):
 		"""
 			Checking for the presence of IPKnot
 		"""
 		pKiss_output = subprocess.Popen(["which", "ipknot"], stdout=subprocess.PIPE).communicate()[0].strip()
-		if len(pKiss_output) > 0 and pKiss_output.find("found") == -1 and pKiss_output.find(" no ") == -1:
-			return True
-		else:
-			self.error = "No IPKnot"
-			print "It seems that IPKnot is not installed on your machine. Please do so!"
-			print "You can get it at http://rtips.dna.bio.keio.ac.jp/ipknot/"
-			exit(0)
+		if not (len(pKiss_output) > 0 and pKiss_output.find("found") == -1 and pKiss_output.find(" no ") == -1):
+			self.error = "No IPKnot detected\nIt seems that IPKnot is not installed on your machine. Please do so!\nYou can get it at http://rtips.dna.bio.keio.ac.jp/ipknot/"
 
 	def checkForHotKnots(self):
 		"""
 			Checking for the presence of HotKnots
 		"""
-		cmd = self.HotKnots_PATH + "/HotKnots"
-		
-		#HotKnots_output = subprocess.Popen([cmd], stdout=subprocess.PIPE).communicate()[0].strip()
-		#if len(HotKnots_output) > 0 and HotKnots_output.find("found") == -1 and HotKnots_output.find(" no ") == -1:
-			#return True
-		
-		if os.path.exists(cmd):
-			return True
-		else:
-			self.error = "HotKnots"
-			print "It seems that HotKnots is not installed on your machine. Please do so!"
-			print "You can get it at http://www.cs.ubc.ca/labs/beta/Software/HotKnots/"
-			exit(0)
+		cmd = self.HotKnots_PATH + "/HotKnots"		
+		if not os.path.exists(cmd):
+			self.error = "HotKnots\nIt seems that HotKnots is not installed on your machine. Please do so!\nYou can get it at http://www.cs.ubc.ca/labs/beta/Software/HotKnots/"
 
 #########################
 # ENTRY TO THE ANT HIVE
