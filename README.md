@@ -11,7 +11,15 @@ A suitabe packaging and maybe as well introduction of class wrappers in sighted.
 
 
 ### VERSION HISTORY (before checking)
-
+ - v118: 
+  - Complete Error Handling via the Variables.error. If there is an error, the program will not do the exit(1),
+  but report to that variable. The user has to check manually. In command line mode, this is done automatically.
+ - v117:
+  - Error handling is moved into the check() function of Variables class. Variables.error can be used as checker.
+ - v116:
+  - adding the AntHill class. A Variables object is instanciated by the call of that class
+ - v115:
+  - adding the Variables class
  - v114:
   - additionally adding HotKnots and IPKnot into structure predictors such that the calculations can be done with them too
  - v113:
