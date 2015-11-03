@@ -13,7 +13,7 @@ import types
 import uuid
 import argparse
 from argparse import RawTextHelpFormatter
-
+import networkx as nx
 
 ##############################
 # ARGPARSE TYPES AND FUNCTIONS
@@ -2345,6 +2345,7 @@ class Variables:
 
 	def check_Accessibilities(self):
 		for i in self.accessibility:
+			print i
 			s1, s2, s3 = i
 			if s2 != "UB" and s2 != "B":
 				self.error = "AccessibilityError: Wrongly defined Accessiblity", s1, s2, s3, "->", s2
@@ -2587,13 +2588,13 @@ class Variables:
 			if self.diff_accessibility:
 				if self.length == None:
 					self.length = len(self.diff_accessibility[0][0])
-				self.check_diff_Accessibilities()
+				self.check_Diff_Accessibilities()
 				structurefeature_check += 1
 								
 			if self.diff_accuracy:
 				if self.length == None:
 					self.length = len(self.diff_accuracy[0][0])
-				self.check_diff_Accuracies()
+				self.check_Diff_Accuracies()
 				structurefeature_check += 1
 
 			if structurefeature_check == 0:
@@ -2721,20 +2722,6 @@ class Variables:
 				self.Interconnection_sets.append(s)
 				
 
-	def getNeighborVertices(self, v_i, graph):
-		"""
-		Extract the neighbors of vertex v_i from graph 
-		"""
-		v = []
-		for g in graph:
-			vi, vj = g
-			if vi == v_i:
-				v.append(vj)
-			elif vj == v_i:
-				v.append(vi)
-		return v
-
-
 	def detect_circles(self):
 		"""
 			Detects cyrcles in secondary structure construct definitions, which have been preparsed into interconnections previously.
@@ -2742,75 +2729,20 @@ class Variables:
 		"""
 
 		for interconnection in self.Interconnection_sets:
-			# print interconnection
-			unvisited = interconnection.copy()
-			graph = []
-			for arc in self.all_requested_BP:
-				if arc[0] in interconnection and arc[0] < arc[1]:
-					graph.append([arc[0], arc[1]])
+			if len(interconnection) > 2:
 
-			no_cycle = True
-			not_checked = True
-			visited = set([])
-			cycle_length = 0
-			the_stack = []
-			backended = []
-			v_i = unvisited.pop()
-			visited.add(v_i)
-			the_stack.append(v_i)
-			came_from = ""
-			while no_cycle and not_checked:
-				vertices = self.getNeighborVertices(v_i, graph)
-				visitable_vertices = set(vertices) - set(visited)
-				# print "vi", v_i, visited, unvisited, the_stack, vertices
-				if len(vertices) > 1:
-					if set(backended) == set(vertices):
-						not_checked = False
-					else:
-						for v in vertices:
-							# print v
-							if v not in visited and v != came_from:
-							 	visited.add(v)
-							 	unvisited.remove(v)
-							 	the_stack.append(v)
-							 	came_from = v_i
-							 	v_i = v
-							 	break
-							elif v in visited and v != came_from:
-								no_cycle = False
-								cycle_length = (len(the_stack)) - the_stack.index(v)
-								print "The_stack One", the_stack
-								print cycle_length
-								break
+				G = nx.Graph()
+				
+				for arc in self.all_requested_BP:
+					if arc[0] in interconnection and arc[0] < arc[1]:
+						G.add_edge(arc[0], arc[1])
+				cycles = nx.cycle_basis(G)
 
-				else:
-					if vertices[0] in visited and vertices[0] != came_from: # ring closure case
-						# print "Singletone close",vertices[0]
-						no_cycle = False
-						cycle_length = (len(the_stack)) - the_stack.index(vertices[0] )
-						# print "The_stack Two", the_stack
-						# print cycle_length
-						
-					elif vertices[0] in visited and vertices[0] == came_from: # back end case
-						# print "Singletone backend",vertices[0]
-						the_stack.pop()
-						backended.append(v_i)
-						came_from = v_i
-						# print "delete", vertices[0]
-						# graph.pop(graph.index(vertices[0]))
-						v_i = the_stack[-1]
+				if cycles:
+					for cycle in cycles:
+						if len(cycle) % 2 != 0:
+							self.error = "Found odd cycle on structure positions %s, of size %s" % (', '.join(str(e) for e in interconnection), cycle_length)
 
-					elif vertices[0] not in visited and vertices[0] != came_from: # starting from a vertex with just one neighbor
-					 	# print "Singletone", v_i
-					 	visited.add(vertices[0])
-					 	unvisited.remove(vertices[0])
-					 	the_stack.append(vertices[0])
-					 	came_from = v_i
-					 	v_i = vertices[0]
-
-			if no_cycle == False and cycle_length % 2 != 0:
-				self.error = "Found odd cycle on structure positions %s, of size %s" % (', '.join(str(e) for e in interconnection), cycle_length)
-			# elif not_checked == False:
 
 	def checkInterconnections(self):
 		
