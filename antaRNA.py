@@ -301,60 +301,6 @@ def getStructStacks(structure_queries):
 	return s_q
     
 
-def getFeatureDistance(BPPMS, features):
-	"""
-		given a sequence, a strucutre constraint in dot_bracket notation and a list of sub strucutre elements, i.e.
-		haipins or recognition sites, the function will return the FeatureDistance, which represents how good the 
-		sequence can perform the requested features.
-	"""
-	#BPPM, C_BPPM = BPPMS
-	tmp_features = []
-
-	# GOING THROUGH THE SPECIFIED FEATURES. CALCULATING THE SUITED MEASURE UNDER THE INFLUENCE OF A CERTAIN CONSTRAINT SITUATION
-	for ask_struct, ask_struct_stack, constraint_system, type_of_measurement, optimi_arg in features:
-		
-		if constraint_system == "UC":
-			
-			if type_of_measurement == "accuracy":
-				tmp_features.append( (ask_struct, 
-									constraint_system, 
-									type_of_measurement, 
-									optimi_arg, 
-									getAccuracy(ask_struct_stack, BPPMS[0])) )
-			elif type_of_measurement == "access":
-				tmp_features.append( (ask_struct, 
-									constraint_system, 
-									type_of_measurement, 
-									optimi_arg, 
-									getAccessibility(ask_struct_stack,len(ask_struct), BPPM[0])) )    
-				
-		elif constraint_system == "C":
-			
-			if type_of_measurement == "accuracy":
-				tmp_features.append( (ask_struct, 
-									constraint_system, 
-									type_of_measurement, 
-									optimi_arg, 
-									getAccuracy(ask_struct_stack, BPPMS[1])) )
-			elif type_of_measurement == "access":
-				tmp_features.append( (ask_struct, 
-									constraint_system, 
-									type_of_measurement, 
-									optimi_arg, 
-									getAccessibility(ask_struct_stack,len(ask_struct), BPPMS[1])) )     
-
-
-	# DERIVING THE FEATURE DISTANCE DEPENDENT ON THE CALULATED VALUE AND SPECIFIED OPTIMIZATION CRITERION
-	feature_distance = 0
-	for ask_struct, constraint_system, type_of_measurement, optimi_arg, value in tmp_features:
-		print ask_struct, constraint_system, type_of_measurement, optimi_arg, value
-		if optimi_arg == "min":
-			feature_distance += value
-		elif optimi_arg == "max":
-			feature_distance += 1 - value
-	feature_distance /= float(len(tmp_features))  
-
-	return feature_distance
 
 	
 	
@@ -1232,7 +1178,7 @@ def getStructuralDistance(args, sequence, RNAfold, RNAfold_pattern):
 					access_1 = getAccessibility(tmp_c, L, DP[i[3]])
 					max_struct_deviation += getMaxTargetDeviation(i[4])
 					diff_1 = abs(access_1 - i[4])
-					# calculating the first deviation
+					# calculating the second deviation
 					access_2 = getAccessibility(tmp_c, L, DP[i[1]])
 					max_struct_deviation += getMaxTargetDeviation(i[2])
 					diff_2 = abs(access_2 - i[2])
@@ -1246,7 +1192,6 @@ def getStructuralDistance(args, sequence, RNAfold, RNAfold_pattern):
 			for i in args.diffaccur:
 				for c in i[0]:
 					tmp_c = {c:i[0][c]}
-					res = {}
 					# calculating the first deviation
 					accur_1 = getAccuracy(tmp_c, DP[i[3]])
 					max_struct_deviation += getMaxTargetDeviation(i[4])
