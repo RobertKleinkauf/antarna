@@ -59,8 +59,8 @@ GC contraint can be concepted in various ways:
 
 ###### References
 When using antaRNA in your work, please cite antaRNA.
- - R. Kleinkauf, M. Mann and R. Backofen, antaRNA: ant colony-based RNA sequence design,doi:10.1093/bioinformatics/btv319, Bioinformatics, 2015
+ - R. Kleinkauf, M. Mann and R. Backofen; antaRNA: ant colony-based RNA sequence design,doi:10.1093/bioinformatics/btv319, Bioinformatics, 2015 Oct 1;31(19):3114-21
   - [antaRNA: ant colony-based RNA sequence
-design](http://bioinformatics.oxfordjournals.org/content/early/2015/06/24/bioinformatics.btv319.full.pdf+html).
- - R. Kleinkauf, T. Houwaart, R. Backofen and M. Mann, antaRNA – Multi-Objective Inverse Folding of Pseudoknot RNA using Ant-Colony Optimization 
-  - Accepted in BMC Bioinformatics: Okt 2015
+design](http://bioinformatics.oxfordjournals.org/content/31/19/3114.long).
+ - R. Kleinkauf, T. Houwaart, R. Backofen and M. Mann; antaRNA: Multi-Objective Inverse Folding of Pseudoknot RNA using Ant-Colony Optimization;doi:10.1186/s12859-015-0815-6, 16:389, BMC Bioinformatics(2015)
+  - [antaRNA: Multi-Objective Inverse Folding of Pseudoknot RNA using Ant-Colony Optimization](http://www.biomedcentral.com/content/pdf/s12859-015-0815-6.pdf)
