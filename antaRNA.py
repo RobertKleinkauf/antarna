@@ -2468,7 +2468,7 @@ class Variables:
 						self.ConvergenceCount = 100
 						self.usedProgram = "pKiss"
 				elif self.pkprogram == "HotKnots" and self.HotKnots_PATH != "":
-					self.checkForHotKnots(args)
+					self.checkForHotKnots()
 					if self.error == "0" and self.pkparameter == True:
 						self.alpha = 1.0
 						self.beta = 0.1
