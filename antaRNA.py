@@ -1,3 +1,4 @@
+
 import numpy
 import RNA
 import sys
@@ -14,6 +15,7 @@ import uuid
 import argparse
 from argparse import RawTextHelpFormatter
 import networkx as nx
+
 
 ##############################
 # ARGPARSE TYPES AND FUNCTIONS
@@ -499,7 +501,7 @@ def maprange( a, b, s):
   (a1, a2), (b1, b2) = a, b
   return  b1 + ((s - a1) * (b2 - b1) / (a2 - a1))
 
-def getConstraint(terrain_element, args):
+def getConstraint(edge, args):
 	"""
 	Dependend on the situation in the constraint an the respective sequence section, setting wether a specific constraint can be given or not (for that sequence section)
 	"""
@@ -510,13 +512,12 @@ def getConstraint(terrain_element, args):
 	# constr1 :: constraining character of pos id1
 	# constr2 :: constraining character of pos id2
 	
-	id1 = int(terrain_element.split(".")[0])
-	
-	targetNucleotide = terrain_element.split(".")[1][-1:] # where the edge is leading to
-
-
 	if args.modus == "MFE":
-	
+		# OLD VERSION
+		#print edge
+		id1 = int(edge.split(".")[0])
+		targetNucleotide = edge.split(".")[1][-1:] # where the edge is leading to
+		
 		val = args.BPstack[id1] # check out the value of the destination character in the basepair/constraint stack
 		constr1 = val[0] # getting the constraint character of position id1
 		id2 = int(val[1][0]) # getting position id2
@@ -543,71 +544,241 @@ def getConstraint(terrain_element, args):
 				return 0
 				
 	if args.modus == "DP":
-		
-		# get set of allowed nucleotides in position i
-		
-		# get set of all constraints to po
-		#print args.interconnections
-		
-		id1 += 1 # the interconnections are 1 based
-		if id1 in args.interconnections: # nuc at pos id1 has some requested interaction
-			#print id1, "In interconnections", args.interconnections[id1]
-			constr1 = args.Cseq[id1-1]
-			if constr1.islower():
-				return 1
-			else:
-				check = ""
-				c1 = args.interconnections[id1][0]
-				#print c1
-				if targetNucleotide in c1:
-					#print targetNucleotide, "in C1"
-					for i in xrange(1,len(args.interconnections[id1])):
-						
-						
-						c2 = "".join(set("".join([args.IUPAC_reverseComplements[i] for i in args.interconnections[id1][i][1].upper()])))
-						
-						#print targetNucleotide, "c2",c2
-						if targetNucleotide not in c2:
-							#print 0
+		x, y = edge
+		id0, targetNucleotide0 = x.split(".")
+		id0 = int(id0)
+		id1, targetNucleotide = y.split(".")
+		id1 = int(id1)
+		check_nuc = ""
+		check_id = -1
+
+		if "XY" in targetNucleotide0:
+			check_nuc = targetNucleotide
+			check_id = id1
+
+
+		if check_nuc == "": # transition is within the graph,indicating a base pair interaction, no consequtive nucleotide...
+			if isCompatible(targetNucleotide0, targetNucleotide, args.IUPAC_compatibles): # the specific base pair is possible, the edge will be further inspected. for constraints
+				# 
+				# get set of allowed nucleotides in position i
+				# get set of all constraints to po
+				#print "---"
+				id1 += 1 # the interconnections are 1 based
+				if id1 in args.interconnections: # nuc at pos id1 has some requested interaction
+					#print id1, "In interconnections", args.interconnections[id1]
+					constr1 = args.Cseq[id1-1]
+					if constr1.islower():
+						return 1
+					else:
+						check = ""
+						c1 = args.interconnections[id1][0]
+						#print c1
+						if targetNucleotide in c1:
+							#print targetNucleotide, "in C1"
+							for i in xrange(1,len(args.interconnections[id1])):
+								c2 = "".join(set("".join([args.IUPAC_reverseComplements[i] for i in args.interconnections[id1][i][1].upper()])))
+								#print targetNucleotide, "c2",c2
+								if targetNucleotide not in c2:
+									#print 0
+									return 0
+							#print 1
+							return 1
+						else:
 							return 0
-					#print 1
-					return 1
-					
-				else:
-					return 0
-				
-		else: # case of no base pair
-			
-			constr1 = args.Cseq[id1-1]
-			
-			#print id1, constr1
-			if constr1.islower():
-				return 1
+				else: # case of no base pair
+					constr1 = args.Cseq[id1-1]
+					#print id1, constr1
+					if constr1.islower():
+						return 1
+					else:
+						c1 = args.IUPAC[constr1.upper()]
+						if targetNucleotide in c1:
+							return 1
+						else:
+							return 0
 			else:
-				c1 = args.IUPAC[constr1.upper()]
-				if targetNucleotide in c1:
+				return 0
+		else: # emitting graph entry point
+			if check_id + 1 in args.interconnections: # nucleotide is starting point of base pair interaction(s)
+				targetNucleotides = set(args.interconnections[check_id + 1][0])
+				#print check_nuc, targetNucleotides, 
+				if check_nuc in targetNucleotides:
+					#print "1"
 					return 1
 				else:
+					#print "0"
 					return 0
+			else: # unbound nucleotide situation
+				return 1
+
+
+## REGULAR INIT TERRAIN FUNCTION
+# def initTerrain(args): 
+# 	"""
+# 		Initialization of the terrain graph  in equidistant mode.
+# 		Vertices are modeled implicitly.
+# 	"""
+# 	nt = ["A","C","G","U"] 
+# 	nt2 = ["AA","AC","AG","AU","CA","CC","CG","CU","GA","GC","GG","GU","UA","UC","UG","UU"] # Allowed dinucleotides
+
+# 	pathlength = 1
+# 	pheromone = 1
+
+
+
 
 def initTerrain(args): 
 	"""
 		Initialization of the terrain graph  in equidistant mode.
 		Vertices are modeled implicitly.
 	"""
-	nt = ["A","C","G","U"] 
-	nt2 = ["AA","AC","AG","AU","CA","CC","CG","CU","GA","GC","GG","GU","UA","UC","UG","UU"] # Allowed dinucleotides
-	e = {}
+	NT = ["A","C","G","U"] 
+	NT2 = ["AA","AC","AG","AU","CA","CC","CG","CU","GA","GC","GG","GU","UA","UC","UG","UU"] # Allowed dinucleotides
 	pathlength = 1
 	pheromone = 1
-	for p in xrange(args.length):
-		if p == 0:
-			for i in nt:
-				e["%s.%s"%(p,i)] = (pheromone, pathlength)
-		elif p > 0:
-			for n in nt2:
-				e["%s.%s"%(p,n)] = (pheromone, pathlength)
-	args.terrain = e
+
+	if args.modus == "MFE":
+
+		e = {}
+		for p in xrange(args.length):
+			if p == 0:
+				for i in NT:
+					e["%s.%s"%(p,i)] = (pheromone, pathlength)
+			elif p > 0:
+				for n in NT2:
+					e["%s.%s"%(p,n)] = (pheromone, pathlength)
+		args.terrain = e
+
+	elif args.modus == "DP":
+		args.TerrainGraph = nx.DiGraph()
+		args.TerrainGraph.add_node("HIVE")
+		args.GenerateSequence = []
+		graph_count = 0
+		for graph in args.interconnection_graphs: # for all subgraphs
+			#print "---"
+			start_node = random.choice(graph.nodes()) - 1 # randomly select a startpoint of the subgraph
+			outpost = str(start_node)+".XY" # label of entry path to outpost subgraph
+			args.TerrainGraph.add_edge("HIVE", outpost) # generate entry path to outpost
+			#print "DEALING START NODE", start_node
+			#args.GenerateSequence.append(("HIVE", outpost))
+			for nt in NT: # generate all pathes from  outpost to first randomly chosen emitting battery of nodes
+
+				target_node = "%s.%s"%(start_node,nt)
+				args.TerrainGraph.add_edge(outpost, target_node, pheromone = pheromone, length = pathlength, status = "active")
+			args.GenerateSequence.append((outpost, start_node))
+			curr_node = start_node
+
+			visited = []
+			visit = [curr_node + 1]
+			walk_order = []
+			#print "PLANNED START:", curr_node 
+			while len(visited) < graph.order():
+				c_node = visit.pop()
+				#print "ARRIVING AT:", c_node - 1
+				if c_node not in visited:
+					visited.append(c_node)
+				neighbor = ""	
+				try:
+					neighbor = random.choice(list(set(graph.neighbors(c_node)) - set(visited)))
+				except:
+					pass
+				if walk_order != []: # node is neighbor of an emmitting node which was visited before...
+					#print "create edges from", walk_order[-1] - 1, "to", c_node - 1
+					for nt1 in NT:
+						start_node = str(walk_order[-1]-1) + "." + nt1
+						for nt2 in NT:
+							target_node = str(c_node - 1) + "." + nt2
+							args.TerrainGraph.add_edge(start_node, target_node, pheromone = pheromone, length = pathlength, status = "active")
+					args.GenerateSequence.append((str(walk_order[-1]-1), str(c_node - 1)))
+					
+				if neighbor != "":
+					#print "NEXT VISIT:", neighbor
+					walk_order.append(c_node)
+					visit = [neighbor]
+				else:
+					if walk_order != []:
+						go_back = walk_order.pop()
+						visit = [go_back]
+				#print "GOING BACK TO:", go_back
+
+	#print args.TerrainGraph.nodes()
+		# visited = [outpost, "HIVE"]
+		# visit = [start_node]
+
+
+		# while len(visit) > 0:
+		# 	i = visit.pop(0)
+		# 	print "from", i
+		# 	neighbors = graph.neighbors(i)
+
+		# 	for neighbor in neighbors:
+		# 		if neighbor not in visit and neighbor not in visited:
+		# 			print neighbor
+
+		# 			# produce corresponding edges
+		# 			produce edges
+
+		# 			visit.append(neighbor)
+		# 	visited.append(i)
+					#args.TerrainGraph.add_edge("%s.%s"%(start_node,nt), , pheromone = pheromone, length = pathlength))
+
+		# graph_count += 1
+		# for n in graph.nodes():
+		# 	print n
+
+	#exit(1)
+	# print args.TerrainGraph.nodes()
+	# for hiveneighbor in args.TerrainGraph.neighbors("HIVE"):
+	# 	print "---"
+	# 	print hiveneighbor
+	# 	for areas in args.TerrainGraph.neighbors(hiveneighbor):
+	# 	#print n, args.TerrainGraph.node(n).edges()
+	# 		if areas != "HIVE":
+	# 			for local in args.TerrainGraph.neighbors(areas):
+	# 				print areas, local, args.TerrainGraph[areas][local]
+	# 				# print areas, args.TerrainGraph[hiveneighbor][areas][local]
+	# 		# , args.TerrainGraph.neighbors(neigh)
+	# 	#print graph.nodes(data=True)
+	# 	#print graph.edges()
+
+	# #print args.TerrainGraph["1.A"]["15.C"]["length"]
+
+	# exit(1)
+
+	
+
+
+
+	# e = {}
+	# pathlength = 1
+	# pheromone = 1
+	# for p in xrange(args.length):
+	# 	if p == 0:
+	# 		for i in nt:
+	# 			e["%s.%s"%(p,i)] = (pheromone, pathlength)
+	# 	elif p > 0:
+	# 		for n in nt2:
+	# 			e["%s.%s"%(p,n)] = (pheromone, pathlength)
+	# args.terrain = e
+
+
+
+
+
+
+# def applyTerrainModification(args):
+# 	"""
+# 		Dependent on the input, this function modifies the terrain accordingly. 
+# 		It reflects the pheromone and path length adjustment.
+# 		Directly affected edges and their implicit neighbor edges are removed 
+# 		from the graph.
+# 	"""
+# 	actGC = {}
+# 	for i in args.GC:
+# 		v, s1, s2 = i
+# 		for j in range(s1-1,s2):
+# 			actGC[j] = v
+# 	
 
 def applyTerrainModification(args):
 	"""
@@ -616,65 +787,138 @@ def applyTerrainModification(args):
 		Directly affected edges and their implicit neighbor edges are removed 
 		from the graph.
 	"""
+
+
+	# determinde the respecitive complementarity chackings and gc length contribution for each edge
 	actGC = {}
 	for i in args.GC:
 		v, s1, s2 = i
-		for j in range(s1-1,s2):
+		for j in range(s1,s2 + 1):
 			actGC[j] = v
 	dels = []
-	for terrainelement in sorted(args.terrain):
-		pheromone, pathlength = args.terrain[terrainelement]
+	#print args.interconnections
+
+	if args.modus == "MFE":	
+		dels = []
+		for terrainelement in sorted(args.terrain):
+			pheromone, pathlength = args.terrain[terrainelement]
+			
+			pheromone = getConstraint(terrainelement,args)
+			
+			#pathlength = getConstraint(terrainelement, args) # is redundant, since the pheromone would have been dealt with this info already...
+			pathlength = applyGCcontributionPathAdjustment(pathlength, actGC, terrainelement)
+			
+			
+			if pheromone * pathlength == 0: dels.append(terrainelement)
+			args.terrain[terrainelement] = (pheromone, pathlength,[])
 		
-		pheromone = getConstraint(terrainelement,args)
+		further_dels = {}
+		for terrainelement in sorted(dels):
+			pos, nucs = terrainelement.split(".")
+			if int(pos) < len(args.Cseq)-1:
+				to_nt = nucs[-1:]
+				successor_pos = int(pos) + 1
+				for i in ["A", "C", "G", "U"]:
+					del_element = str(successor_pos) + "." + to_nt + i
+					further_dels[del_element] = 1
+			further_dels[terrainelement] = 1
+		# deleting the inbound and outbound edges, which are forbidden
+		for terrainelement in further_dels:
+			del args.terrain[terrainelement]
+		# allocate the appropriate children of edges 
+		for terrainelement in args.terrain:
+			pheromone, pathlength, children = args.terrain[terrainelement]
+			pos, nucs = terrainelement.split(".")
+			if int(pos) < args.length:
+				to_nt = nucs[-1:]
+				successor_pos = int(pos) + 1
+				for i in ["A", "C", "G", "U"]:
+					if str(successor_pos) + "." + to_nt + i in args.terrain:
+						children.append(str(successor_pos) + "." + to_nt + i)
+			args.terrain[terrainelement] = (pheromone, pathlength,children)
+		# ADDING THE START EDGES
+		starts = []
+		for i in ["A", "C", "G", "U"]:
+			if str(0) + "." + i in args.terrain:
+				starts.append(str(0) + "." + i)
+		args.terrain["00.XY"] = (1, 1, starts)
 		
-		#pathlength = getConstraint(terrainelement, args) # is redundant, since the pheromone would have been dealt with this info already...
-		pathlength = applyGCcontributionPathAdjustment(pathlength, actGC, terrainelement)
+		# CHECK IF THERE ARE EMPTY SUCCESSOR INFORMATION WITHIN THE SEQUENCE
+		for terrainelement in args.terrain:
+			pher, length, successors = args.terrain[terrainelement]
+			id1 = terrainelement.split(".")[0]
+			#print id1 ,len(args.Cseq), len(successors)
+			if id1 < len(args.Cseq) and len(successors) == 0:
+				args.error = "TerrainError: No successors detected where some should have appeared! %s %s" % (terrainelement, args.terrain[terrainelement])
+
+	elif args.modus == "DP":	
+
+		for edge in args.TerrainGraph.edges():
+			if "HIVE" not in edge:
+				x, y = edge
+
+				pheromone = args.TerrainGraph[x][y]["pheromone"]
+				pathlength = args.TerrainGraph[x][y]["length"]
+				
+				pheromone = getConstraint(edge,args)
+				pathlength = applyGCcontributionPathAdjustment(pathlength, actGC, edge)
+				if pheromone * pathlength == 0: 
+					dels.append(edge)
+				else:
+					args.TerrainGraph[x][y]["pheromone"] = pheromone
+					args.TerrainGraph[x][y]["length"] = pathlength
+			
+		for edge in dels:
+			x, y = edge
+			args.TerrainGraph.remove_edge(x, y)
+
+	# exit(1)
+
+	#for edge in args.TerrainGraph.edges():
+	#	if "HIVE" not in edge :
+	#		print edge
+	# exit(1)
+	# further_dels = {}
+	# for terrainelement in sorted(dels):
+	# 	pos, nucs = terrainelement.split(".")
+	# 	if int(pos) < len(args.Cseq)-1:
+	# 		to_nt = nucs[-1:]
+	# 		successor_pos = int(pos) + 1
+	# 		for i in ["A", "C", "G", "U"]:
+	# 			del_element = str(successor_pos) + "." + to_nt + i
+	# 			further_dels[del_element] = 1
+	# 	further_dels[terrainelement] = 1
+	# # deleting the inbound and outbound edges, which are forbidden
+	# for terrainelement in further_dels:
+	# 	del args.terrain[terrainelement]
+	# # allocate the appropriate children of edges 
+	# for terrainelement in args.terrain:
+	# 	pheromone, pathlength, children = args.terrain[terrainelement]
+	# 	pos, nucs = terrainelement.split(".")
+	# 	if int(pos) < args.length:
+	# 		to_nt = nucs[-1:]
+	# 		successor_pos = int(pos) + 1
+	# 		for i in ["A", "C", "G", "U"]:
+	# 			if str(successor_pos) + "." + to_nt + i in args.terrain:
+	# 				children.append(str(successor_pos) + "." + to_nt + i)
+	# 	args.terrain[terrainelement] = (pheromone, pathlength,children)
+	# # ADDING THE START EDGES
+	# starts = []
+	# for i in ["A", "C", "G", "U"]:
+	# 	if str(0) + "." + i in args.terrain:
+	# 		starts.append(str(0) + "." + i)
+	# args.terrain["00.XY"] = (1, 1, starts)
+	
+	# # CHECK IF THERE ARE EMPTY SUCCESSOR INFORMATION WITHIN THE SEQUENCE
+	# for terrainelement in args.terrain:
+	# 	pher, length, successors = args.terrain[terrainelement]
+	# 	id1 = terrainelement.split(".")[0]
+	# 	#print id1 ,len(args.Cseq), len(successors)
+	# 	if id1 < len(args.Cseq) and len(successors) == 0:
+	# 		args.error = "TerrainError: No successors detected where some should have appeared! %s %s" % (terrainelement, args.terrain[terrainelement])
 		
-		
-		if pheromone * pathlength == 0: dels.append(terrainelement)
-		args.terrain[terrainelement] = (pheromone, pathlength,[])
 	
-	further_dels = {}
-	for terrainelement in sorted(dels):
-		pos, nucs = terrainelement.split(".")
-		if int(pos) < len(args.Cstr)-1:
-			to_nt = nucs[-1:]
-			successor_pos = int(pos) + 1
-			for i in ["A", "C", "G", "U"]:
-				del_element = str(successor_pos) + "." + to_nt + i
-				further_dels[del_element] = 1
-		further_dels[terrainelement] = 1
-	# deleting the inbound and outbound edges, which are forbidden
-	for terrainelement in further_dels:
-		del args.terrain[terrainelement]
-	# allocate the appropriate children of edges 
-	for terrainelement in args.terrain:
-		pheromone, pathlength, children = args.terrain[terrainelement]
-		pos, nucs = terrainelement.split(".")
-		if int(pos) < args.length:
-			to_nt = nucs[-1:]
-			successor_pos = int(pos) + 1
-			for i in ["A", "C", "G", "U"]:
-				if str(successor_pos) + "." + to_nt + i in args.terrain:
-					children.append(str(successor_pos) + "." + to_nt + i)
-		args.terrain[terrainelement] = (pheromone, pathlength,children)
-	# ADDING THE START EDGES
-	starts = []
-	for i in ["A", "C", "G", "U"]:
-		if str(0) + "." + i in args.terrain:
-			starts.append(str(0) + "." + i)
-	args.terrain["00.XY"] = (1, 1, starts)
-	
-	# CHECK IF THERE ARE EMPTY SUCCESSOR INFORMATION WITHIN THE SEQUENCE
-	for terrainelement in args.terrain:
-		pher, length, successors = args.terrain[terrainelement]
-		id1 = terrainelement.split(".")[0]
-		#print id1 ,len(args.Cseq), len(successors)
-		if id1 < len(args.Cseq) and len(successors) == 0:
-			args.error = "TerrainError: No successors detected where some should have appeared! %s %s" % (terrainelement, args.terrain[terrainelement])
-	
-	
-def applyGCcontributionPathAdjustment(pathlength, actGC, terrainelement):
+def applyGCcontributionPathAdjustment(pathlength, actGC, edge):
 	"""
 		GC path length contribution calculation.
 	"""	
@@ -682,7 +926,13 @@ def applyGCcontributionPathAdjustment(pathlength, actGC, terrainelement):
 	minimum = 0.5
 	upper = GCadjustment
 	lower = minimum
-	position , nts = terrainelement.split(".")
+	x = ""
+	y = ""
+	try:
+		x, y = edge
+	except:
+		y = edge
+	position , nts = y.split(".")
 	nt = nts[-1:]
 
 	if nt == "A" or nt == "U":
@@ -721,10 +971,83 @@ def printTerrain(terrain):
 # SEQUENCE ASSEMBLY a.k.a. The ANTWALK
 ########################################
 
-def pickStep(tmp_steps, summe):
+
+
+def prepare_selection(args, allowed_nt, prev_edge):
+	### load all legal steps for a selection to selection_set
+	summe = 0
+	selection_set = []
+	for edge in args.terrain[prev_edge][-1]:	
+		if edge[-1:] in allowed_nt:
+			#print edge, 
+			pheromone, PL, children = args.terrain[edge]
+			value = ((float(pheromone * args.alpha)) + ((1/float(PL)) * args.beta))
+			summe += value
+			#print (value, edge)
+			selection_set.append((value, edge))
+	selection_set = (summe, selection_set)
+	return  selection_set
+
+def checkSelection(sel):
+	if len(sel[1]) == 0:
+		print "No legal nucleotides to fill in here. Please check your sequence constraint!"
+		exit(1)
+
+def updateSequenceConstraint(sequenceConstraint, graph, position, selected_nucleotide, iupac_complements):
+
+	visited = []
+	visit = [(position, selected_nucleotide)]
+	#print "----"
+	while len(visit)>0:
+
+		#print "Visited", visited
+		#print "Visit", visit
+
+		l = visit.pop(0)
+		#print "Check", l, 
+		i, nucleotide = l
+		if len(sequenceConstraint[i]) > 1:
+			#print "Updating"
+			sequenceConstraint[i] = nucleotide
+		#else:
+			#print "Good"
+		#print i + 1, graph.neighbors(i+1)
+		for n in graph.neighbors(i+1):
+			if not n in visited:
+				if n != position + 1:
+					if len(sequenceConstraint[n - 1]) > 1:
+						visited.append(n)
+						for nucleotid in list(nucleotide):
+							#print type(iupac_complements[nucleotid]), iupac_complements[nucleotid]
+							complement_nucleotides = iupac_complements[nucleotid]
+							#print "complement_nucleotides of poition ", i , list(complement_nucleotides)
+							present_constraint = list(sequenceConstraint[n - 1])
+							#print "present sequence constraint of position ", n - 1, present_constraint
+							new_constraint = "".join([c for c in list(complement_nucleotides) if c in present_constraint])
+							#print "New Constraint", (n-1, new_constraint)
+							visit.append((n-1, new_constraint))
+					#else:
+						#print "Already single nucleotide constraint", n - 1, sequenceConstraint[n - 1]
+	#print "END----"
+
+
+# def fillSequence(args, sequence, path, j, Cseq_allowed_nt, prev_edge, graph):
+
+# 	selection = prepare_selection(args, Cseq_allowed_nt, prev_edge)
+# 	print selection
+# 	checkSelection(selection)
+# 	prev_edge = pickNucleotide(selection)
+
+# 	print "Selected Edge", prev_edge
+# 	selected_nucleotide = prev_edge[-1:]
+# 	if graph.order() > 0:
+# 		updateGraph(graph, j, selected_nucleotide, args.IUPAC_reverseComplements)
+# 	return selected_nucleotide, prev_edge
+def pickNucleotide(selection):
 	"""
 		Selects a step within the terrain
 	"""
+	summe, tmp_steps = selection
 	if len(tmp_steps) == 1:
 		return tmp_steps[0][1] # returning the nucleotide of the only present step
 	else:
@@ -736,98 +1059,196 @@ def pickStep(tmp_steps, summe):
 			if mainval > rand: # as soon, as the mainval gets larger than the random value the assignment is done
 				return label
 
+def pickEdgeFromSelection(args, selection):
+	summe = 0
+	selection_set = []
+	for edge in selection:
+			#print edge
+			x, y = edge
+			#print args.TerrainGraph[x][y]
+
+			pheromone = args.TerrainGraph[x][y]["pheromone"] 
+			pathlength = args.TerrainGraph[x][y]["length"]
+
+			value = ((float(pheromone * args.alpha)) + ((1/float(pathlength)) * args.beta))
+			summe += value
+			selection_set.append((value, edge))
+
+	if len(selection_set) == 1:
+		return selection_set[0][1] # returning the nucleotide of the only present step
+	else:
+		rand = random.random() # draw random number
+		mainval = 0
+		for choice in xrange(len(selection_set)):
+			val, label = selection_set[choice]
+			mainval += val/float(summe)
+			if mainval > rand: # as soon, as the mainval gets larger than the random value the assignment is done
+				return label
+
+def getSequenceConstraint(args):
+		args.sequenceConstraint = {}
+		for i in xrange(args.length):
+			#print i,
+			if i + 1 in args.interconnections:
+				args.sequenceConstraint[i] = args.interconnections[i + 1][0]
+			else:
+				args.sequenceConstraint[i] = args.IUPAC[args.Cseq[i]]
+
 def getSequence(args):
 	"""
 		Performs a walk through the terrain and assembles a sequence, while respecting the structure constraint and IUPAC base complementarity
 		of the base pairs GU, GC and AT
 	"""
-	nt = ["A","C","G","U"]
-	prev_edge = "00.XY"
-	sequence = ""
-	
-	#print 
-	#exit(1)
-	while len(sequence) < args.length:
-		##print len(sequence) , len(args.Cstr)
-		coming_from = sequence[-1:]
-		summe = 0
-		steps = []
-		i = len(sequence)
-		allowed_nt = "ACGU"
-		# base pair closing case check, with subsequent delivery of a reduced allowed nt set
-		#print args.BP
-		#exit(1)
-		if i in args.BPstack:
-			#print i, args.BP
-			if i > args.BPstack[i][1][0]:
-				jump =  args.BPstack[i][1][0]
-				nuc_at_jump = sequence[jump]
-				allowed_nt = args.IUPAC_reverseComplements[nuc_at_jump]
-				#print args.BP[i][1][0], i, nuc_at_jump, "->", allowed_nt
-				
-			#allowed_nt = complementBase(nuc_at_jump)
-		
-		#print args.interconnections
-		#exit(1)
-		if args.modus == "DP":
-			#print args.interconnections
-			#exit(1)
-			j = i+1
-			#print "Position", i,
-			if j in args.interconnections: # position is involved in a base pair interconnection
-				#print "->" , i+1, "in Interconnection"
-				Cseq_allowed_nt = ""
-				"""
-					allowed nucleotides, if current position is closing base pair position
-				"""
-				for partner in xrange(1, len(args.interconnections[j])):
-					jumpt_pos = args.interconnections[j][partner][0] -1
-					if jumpt_pos < j:
-						#print sequence, jumpt_pos, sequence[jumpt_pos], args.IUPAC_reverseComplements[sequence[jumpt_pos]]
-						Cseq_allowed_nt = args.IUPAC_reverseComplements[sequence[jumpt_pos]]
-						
-						
-						#Cseq_allowed_nt = "".join(set("".join([args.IUPAC_reverseComplements[i] for i in args.interconnections[j][partner][1].upper()])))
 
-				"""
-					allowed nucleiotides from sequence constraint with potential limitations form corresponding base constraints (open base pair)
-				"""
-				if Cseq_allowed_nt == "":
-					Cseq_allowed_nt = args.interconnections[j][0]
+
+	nt = ["A","C","G","U"]
+	path = ["_"] * args.length
+
+
+	if args.modus == "MFE":
+
+		prev_edge = "00.XY"
+		sequence = ""
+		#print 
+		#exit(1)
+		while len(sequence) < args.length:
+			##print len(sequence) , len(args.Cstr)
+			coming_from = sequence[-1:]
+			summe = 0
+			steps = []
+			i = len(sequence)
+			allowed_nt = "ACGU"
+			# base pair closing case check, with subsequent delivery of a reduced allowed nt set
+			#print args.BP
+			#exit(1)
+			if i in args.BPstack:
+				#print i, args.BP
+				if i > args.BPstack[i][1][0]:
+					jump =  args.BPstack[i][1][0]
+					nuc_at_jump = sequence[jump]
+					allowed_nt = args.IUPAC_reverseComplements[nuc_at_jump]
+					#print args.BP[i][1][0], i, nuc_at_jump, "->", allowed_nt
+				#allowed_nt = complementBase(nuc_at_jump)
+			for edge in args.terrain[prev_edge][-1]:
 				
+				if edge[-1:] in allowed_nt:
+					#print edge, 
+					pheromone, PL, children = args.terrain[edge]
+					value = ((float(pheromone * args.alpha)) + ((1/float(PL)) * args.beta))
+					summe += value
+					#print (value, edge)
+					steps.append((value, edge))
+			#print ""
+			if len(steps) > 0:
+				prev_edge = pickNucleotide( (summe, steps) )
+			#print "Selected Edge", prev_edge
+				pos, edge = prev_edge.split(".")
+				sequence += edge[-1:]
+				pos = int(pos)
+				path[pos] = prev_edge
 			else:
-				#print "Drawing sequence constraint from Cseq"
-				"""
-					allowed nucleiotides from sequence constraint
-				"""
-				Cseq_allowed_nt = args.IUPAC[args.Cseq[i]]
-			#print "Cseq_allowed_nt", Cseq_allowed_nt
-			allowed_nt = Cseq_allowed_nt
-			
-		#print "allowed_nt",allowed_nt
-		# Checking for every possible nt if it is suitable for the selection procedure
+				print "No legal nucleotides to fill in here. Please check your sequence constraint!"
+				exit(1)
+		return sequence, path
+
+	elif args.modus == "DP":
+
+
+		sequence = ["_"] * args.length
 		
-		for edge in args.terrain[prev_edge][-1]:
-			
-			if edge[-1:] in allowed_nt:
-				#print edge, 
-				pheromone, PL, children = args.terrain[edge]
-				value = ((float(pheromone * args.alpha)) + ((1/float(PL)) * args.beta))
-				summe += value
-				#print (value, edge)
-				steps.append((value, edge))
-		#print ""
-		if len(steps) > 0:
-			prev_edge = pickStep(steps, summe)
-		#print "Selected Edge", prev_edge
-			sequence += prev_edge[-1:]
-		else:
-			print "No legal nucleotides to fill in here. Please check your sequence constraint!"
-			exit(1)
-		
-	#print sequence 
+		getSequenceConstraint(args)
+		# print args.TerrainGraph.nodes()
+		# for graph in args.interconnection_graphs:
+		# 	print graph.nodes()
+
+		for i, step in enumerate(args.GenerateSequence):
+			#print step
+			source_node, target_node = step
+			#print step
+			#if "XY" in source_node:
+			# if "XY" not in source_node: # managing the source node. It has the required info in its label and gets nucleotode info from the established sequence
+			# preparing a selection of target nodes.
+			#	 s = forbidden nucleotides due to complementarily set nucleotides in interacting sequence positions
+			#neighbors_set = set(args.TerrainGraph.neighbors(source_node)) # actual neighbors of source_node
+			legal_target_node_nucleotides = list(args.sequenceConstraint[int(target_node)]) # get the legal list of nucleotides.due to sequence constraint
+			if "XY" not in source_node:
+				complements = list(args.IUPAC_reverseComplements[sequence[int(source_node)]])
+				legal_target_node_nucleotides = [c for c in complements if c in legal_target_node_nucleotides]
+				source_node = source_node + "." + sequence[int(source_node)]
+			target_nodes = [str(target_node) + "." + n for n in legal_target_node_nucleotides]
+			legal_edges = [ (source_node, s) for s in target_nodes]
+			#print source_node, legeal_edges, 
+			 # if args.TerrainGraph[source_node][s]["status"] == "active"
+			# print source_node, target_node, selection
+			edge = pickEdgeFromSelection(args, legal_edges)
+			position, emission = edge[1].split(".")
+			# position = int(position)
+			# #print emission
+			# for graph in args.interconnection_graphs:
+			# 	if position + 1 in graph.nodes():
+			# 		#print "update sequeceoncstraint of "
+			# 		#print position, "->", position + 1
+			# 		#print graph.nodes()
+			# 		updateSequenceConstraint(args.sequenceConstraint, graph, position, emission, args.IUPAC_reverseComplements)
+			sequence[int(position)] = emission
+			path[int(position)] = edge
+
+		return "".join(list(sequence)) , path
+		# print edge, "Emitting Nucleotide:", emission
+	#print "".join(list(sequence))
 	#exit(1)
-	return sequence
+	#print "0123456789012345678901234567890"
+	#print "".join(sequence)
+
+	#exit(1)
+	# while len(visit_q) > 0:
+	# 	i = visit_q.pop(0) - 1
+	# 	j = i+1
+	# 	print "================================================================"
+
+	# 	print "Sequence Position", i,
+	
+	# 	if j in args.nodelist: # position is involved in a base pair interaction (n >= 2)
+	# 		print "->" , j, "is in a base pairing situation"
+
+	# 		for graph in args.interconnection_graphs:
+	# 			if j in graph:
+
+	# 				neigbors = graph.neighbors(j)
+	# 				for n in neigbors:
+	# 					if n not in visited_q and n not in visit_q:
+	# 						visit_q.append(n)
+	# 				print j, visit_q
+	# 				Cseq_allowed_nt = graph.node[j]["Cseq"]
+	# 				visited_q.append(j)
+	# 				# if j > 1:
+	# 				# 	prev_edge = path[i - 1]
+	# 				nucleotide, edge = fillSequence(args, sequence, path, j, Cseq_allowed_nt, prev_edge, graph)
+	# 				sequence[i] = nucleotide
+	# 				path[i] = edge
+
+	# 	else: #Drawing sequence constraint from Cseq
+	# 		print "Drawing sequence constraint from Cseq"
+	# 		Cseq_allowed_nt = args.IUPAC[args.Cseq[i]]
+	# 		tmp_graph = nx.Graph()
+	# 		# if j > 1:
+	# 		# 	prev_edge = path[i - 1]
+	# 		nucleotide, edge = fillSequence(args, sequence, j, Cseq_allowed_nt, prev_edge, graph)
+	# 		sequence[i] = nucleotide
+	# 		path[i] = edge
+	# 	if len(visit_q) == 0:
+	# 		print "get new start:"
+	# 		new = "".join(list(sequence)).find("_")
+	# 		if new != -1:
+	# 			print new 
+	# 			visit_q.append(new + 1)
+	# 	print "".join(list(sequence))
+	# print "0123456789012345678901234567890"
+	# print "".join(list(sequence)) 
+	# print "".join(list(sequence))
+	# print path
+
+	
 	
 def getSequenceFromSelection(args, RNAfold, RNAfold_pattern):
 	"""
@@ -836,21 +1257,27 @@ def getSequenceFromSelection(args, RNAfold, RNAfold_pattern):
 	win_sequence = None
 	for i in xrange(args.ants_per_selection): # for k ants do:
 		# Generate Sequence
-		sequence = getSequence(args)
-		
+		sequence, path = getSequence(args)
+		# print sequence
+		# print path
 		# Measure sequence features and transform them into singular distances
 		ds, structure = getStructuralDistance(args, sequence, RNAfold, RNAfold_pattern)
 		dGC = getGCDistance(sequence, args)
 		dseq = getSequenceEditDistance(args.Cseq, sequence)
+		# print "ds",ds
+		# print "dgc",dGC, getGC(sequence)
+		# print "dseq", dseq
 		# Calculate Distance Score
 		D = ds + dGC + dseq
 		# SELECT THE BEST-OUT-OF-k-SOLUTIONS according to distance score
 		if i == 0: # Initial Case
-			win_sequence = (sequence, structure, D, ds, dGC, dseq)
+			win_sequence = (sequence, structure, D, ds, dGC, dseq, path)
 		else:
 			if D < win_sequence[2]: # Challenge the Champion Case
-				win_sequence = (sequence, structure, D, ds, dGC, dseq)
-	#print win_sequence
+				win_sequence = (sequence, structure, D, ds, dGC, dseq, path)
+	# print win_sequence[0], win_sequence[6], win_sequence[2]
+	# exit(1)
+	
 	return win_sequence
 	
 ################################
@@ -1264,16 +1691,14 @@ def getGCDistance( sequence, args):
 		gc = getGC(tmp_seq)
 		nt_coeff = L * v
 		pc_nt = (1/float(L))*100
-
 		d = gc - v
 		d = d * 100
 		f = math.floor(nt_coeff)
 		c = math.ceil(nt_coeff)
-
 		if d < 0: 
-			d = d + (abs(nt_coeff - f)) * pc_nt
+			d = d + (abs(nt_coeff - f) * pc_nt)
 		elif d > 0: 
-			d = d - abs(nt_coeff - c) * pc_nt
+			d = d - (abs(nt_coeff - c) * pc_nt)
 		elif d == 0:
 			pass
 		
@@ -1302,23 +1727,30 @@ def evaporate(args):
 	"""
 	Evaporate the terrain's pheromone trails
 	"""
-	c = 1
-	for key in args.terrain:
-		p, l, c = args.terrain[key]
-		p *= (1 - args.ER)
-		args.terrain[key] = (p, l, c)
+	if args.modus == "MFE":
+		c = 1
+		for key in args.terrain:
+			p, l, c = args.terrain[key]
+			p *= (1 - args.ER)
+			args.terrain[key] = (p, l, c)
+
+	elif args.modus == "DP":
+		for edge in [e for e in args.TerrainGraph.edges() if "HIVE" not in e[0]]:
+			x, y = edge
+			args.TerrainGraph[x][y]["pheromone"] *= (1 - args.ER)
 		
-def trailBlaze(sequence, current_structure, ds, dgc, dseq, args):
+def trailBlaze(sequence, path, current_structure, ds, dgc, dseq, args):
 	"""
 		Pheromone Update function accorinding to the quality of the solution
 	"""
-	
+	#print "trail blaze"
 	bs = updateValue(ds, args.Cstrweight, args.omega)
 	bGC = updateValue(dgc, args.Cgcweight, args.omega)
 	bSeq = updateValue(dseq, args.Cseqweight, args.omega)
 	d = bs + bGC + bSeq
 
-	transitions = getTransitions(sequence)
+	#transitions = getTransitions(sequence)
+	transitions = path
 	#print args
 	if args.modus == "MFE":
 
@@ -1347,64 +1779,60 @@ def trailBlaze(sequence, current_structure, ds, dgc, dseq, args):
 		# interconnection complex. and bonify it only, if the whole complex is 
 		# satisfying within the dotplots.
 
-		T = transformTransitions(transitions)
+		#T = transformTransitions(transitions)
 
 		#print args.PosFeatures
 		#exit(1)
-		
-		
-		"""
-			In this version, each position is dealt individually and to all its features listed from the input.
-		"""
+		# """
+		# 	In this version, each position is dealt individually and to all its features listed from the input.
+		# """
+		# for trans in transitions:
+		# 	from_nt, to_nt = trans
 
-		for trans in transitions:
-			t_i = int(trans.split(".")[0])
-			i = t_i + 1
+		# 	t_i = int(to_nt.split(".")[0])
+		# 	i = t_i + 1
 
-			deviations = []
-
-			for DP in args.PosFeatures[i]:
-				#print DP
-				if len(args.PosFeatures[i][DP]) > 0:
+		# 	deviations = []
+		# 	for DP in args.PosFeatures[i]: # for each present dotplot
+		# 		#print DP
+		# 		if len(args.PosFeatures[i][DP]) > 0:
 					
-					for k, feature in enumerate(args.PosFeatures[i][DP]):
-						#print k, feature
-						feature_type, j, value = feature
-						
-						if feature_type == "Accu":
-							tmp_stack = {i:j}
-							val = getAccuracy(tmp_stack, current_structure[DP])
-						elif feature_type == "Accs":
-							tmp_stack = {i:j}
-							val = getAccessibility(tmp_stack, len(args.Cseq), current_structure[DP])
-						deviations.append(abs(val - value))
+		# 			for k, feature in enumerate(args.PosFeatures[i][DP]): # for all listed features on current position
 
+		# 				feature_type, j, value = feature						
+		# 				if feature_type == "Accu":
+		# 					tmp_stack = {i:j}
+		# 					val = getAccuracy(tmp_stack, current_structure[DP])
+		# 				elif feature_type == "Accs":
+		# 					tmp_stack = {i:j}
+		# 					val = getAccessibility(tmp_stack, len(args.Cseq), current_structure[DP])
+		# 				deviations.append(abs(val - value)) # report and add up deviations
 
-
-			if len(deviations) > 0:
-				if numpy.sum(deviations) <= 0.05:
-					"""
-						ALL EDGES y.xB GET PROMOTED DUE TO NUCLEOTIDE B in y.AB BEING PART OF A PARTIAL STRUCTURE...
-					"""
-					#print trans
-					no, trail = transitions[t_i].split(".")
-					nt = ["A", "C", "G", "U"]
-
-					if len(trail) > 1:
-						to_nt = trail[-1:]
-						edges = set([ no + "." + n + to_nt for n in nt])
-					else:
-						edges = set(transitions[t_i])
-
-					for edge in edges:
-						try:
-							p, l, c = args.terrain[edge] # getting the pheromone and the length value of the single path transition
-							p +=  d * (1-abs(val - value)) * 100000
-							args.terrain[transitions[t_i]] = (p, l, c)
-						except:
-							pass
-
-		
+		# 	if len(deviations) > 0: # investigate positions bonification
+		# 		if numpy.sum(deviations) <= 0.05: # if general deviation on this position is below value
+		# 			"""
+		# 				ALL EDGES (x.A, y.B) GET PROMOTED DUE TO NUCLEOTIDE B in y.B BEING PART OF the solution structure 
+		# 			"""
+		# 			#print trans
+		# 			#print t_i
+		# 			edges = [e for e in args.TerrainGraph.edges() if str(t_i) in e[1] and "XY" not in e[1]]
+		# 			# no, trail = transitions[t_i].split(".")
+		# 			# nt = ["A", "C", "G", "U"]
+		# 			# if len(trail) > 1:
+		# 			# 	to_nt = trail[-1:]
+		# 			# 	edges = set([ no + "." + n + to_nt for n in nt])
+		# 			# else:
+		# 			# 	edges = set(transitions[t_i])
+		# 			for edge in edges:
+		# 				try:
+		# 					x, y = edge
+		# 					#print x, y
+		# 					args.TerrainGraph[x][y]["pheromone"] += d * (1-abs(val - value)) * 100
+		# 					# p, l, c = args.terrain[edge] # getting the pheromone and the length value of the single path transition
+		# 					# p +=  d * (1-abs(val - value)) * 100000
+		# 					#args.terrain[transitions[t_i]] = (p, l, c)
+		# 				except:
+		# 					pass
 		"""
 			JUST THE SPECIFIC EDGE y.AB IS ACTUALLY PROMOTED, where B was the important nucleotide present in y A in y-1
 		"""
@@ -1414,13 +1842,41 @@ def trailBlaze(sequence, current_structure, ds, dgc, dseq, args):
 
 
 		"""
-			If a complete interaction collection is performing well, the whole interconnection is highly benefitted
-		
+			If a complete interaction collection is performing well, the whole interconnection is bonified by average quality of the group
 		"""
-		for interconnection in args.Interconnection_sets:
+
+		for i, edge in enumerate(args.GenerateSequence):
+			# extract info about subgraph to investigate
+			batch = []
+			if "XY" in edge[0]: # starting point to investigate a subgraph and create a corresponding batch
+				batch.append(edge)
+				j = i
+				if j + 1 < len(args.GenerateSequence)-1: # increment for following edges
+						j += 1
+				else:
+					break
+				# add edges to the batch until the next "XY" label
+				while "XY" not in args.GenerateSequence[j][0]: 
+					batch.append(args.GenerateSequence[j])
+					if j + 1 < len(args.GenerateSequence)-1:
+						j += 1
+					else:
+						break
+
+			# extract respective nodes which are involved in the subgraph			
+			batch_individuals = set([])
+			for element in batch:
+				element0, element1 = element
+				for e in [element0, element1]:
+					if "XY" not in str(e):
+						batch_individuals = batch_individuals | set([str(e)])
+			batch_individuals = sorted(list(batch_individuals))
+
+			# check for each individual of the batch, how it performs in the dotplots and retreive
+			# the corresponding deviation from the target value
 			values = []
-			for i in list(interconnection):
-				trans =  str(i-1)+"."+T[str(i-1)]
+			for h in batch_individuals:
+				i = int(h) + 1
 				for DP in args.PosFeatures[i]:
 					if len(args.PosFeatures[i][DP]) > 0:
 						for k, feature in enumerate(args.PosFeatures[i][DP]):
@@ -1433,22 +1889,19 @@ def trailBlaze(sequence, current_structure, ds, dgc, dseq, args):
 								tmp_stack = {i:j}
 								val = getAccessibility(tmp_stack, len(args.Cseq), current_structure[DP])
 								values.append(abs(val - value))
-			if len(values) > 0:
+
+			# check wheather some values could be retrieved, then 
+			if len(values) > 0: # calculate an average value of the just vitnessed results
 				avrg_val = sum(values)/float(len(values))
-
-			else:
+			else: # or assume the worst case, maximal deviation
 				avrg_val = 1
-				
-			##print interconnection, avrg_val
-			#if  avrg_val <= 0.1:
 
-				
-				#for i in list(interconnection):
-					#trans =  str(i-1)+"."+T[str(i-1)]
-					#p, l, c = args.Terrain[trans] # getting the pheromone and the length value of the single path transition
-					#p +=  d * (1-avrg_val)*1000
-					#args.Terrain[trans] = (p, l, c)
-
+			# bonify the members of the batch if the average is below a certain threshold
+			if  avrg_val <= 0.2: 
+				for element in batch_individuals:  # retreive corresponding edge, which led to the respective nucleotide
+				 	sequence_position = int(element)
+				 	from_nt, to_nt = path[sequence_position]
+					args.TerrainGraph[from_nt][to_nt]["pheromone"] +=  d * (1-avrg_val) # bonify with average batch value
 
 
 def getTransitions(p):
@@ -1486,12 +1939,12 @@ def updateValue(distance, correction_term, omega):
 		else:
 			return (1/float(distance)) * correction_term
       
-def updateTerrain(sequence, current_structure, ds, dgc, dseq, args):
+def updateTerrain(sequence, path, current_structure, ds, dgc, dseq, args):
 	"""
 		General updating function
 	"""
 	evaporate(args)
-	trailBlaze(sequence, current_structure, ds, dgc, dseq, args)
+	trailBlaze(sequence, path,  current_structure, ds, dgc, dseq, args)
 
 	
 	
@@ -1547,6 +2000,7 @@ def setGC(args):
 	if len(args.tGC) == 1:
 		args.GC = [(getGCSamplingValue(args.tGC[0][0], args.tGCmax, args.tGCvar), args.tGC[0][1], args.tGC[0][2])]
 	else:
+
 		args.GC = args.tGC
 
 
@@ -1699,7 +2153,7 @@ def exe():
 								
 	constraints.add_argument("-noGU", "--noGUBasePair", 
 								help="Forbid GU base pairs. \n\n", 
-								action="store_false")
+								action="store_true")
 								
 	constraints.add_argument("-noLBP", "--noLBPmanagement", 
 								help="Disallowing antaRNA lonely base pair-management. \n\n", 
@@ -1734,7 +2188,7 @@ def exe():
 								help="Prints additional features and stats to the headers of the produced sequences. Also adds the structure of the sequence.\n\n", 
 								action="store_true")
 	output.add_argument("--plot", 
-								help="Print comic terrain.\n\n", 
+								help="Print Terrain Nodes and edges files.\n\n", 
 								action="store_true")
 
 	
@@ -1805,7 +2259,6 @@ def exe():
 								type=float, 
 								default=1.0)
 
-
 	aco.add_argument("-t", "--time", 
 								help="Limiting runtime [seconds]\n(DEFAULT: %(default)s, TYPE: %(type)s)\n\n\n", 
 								type=int, 
@@ -1831,8 +2284,15 @@ def exe():
 #########################
 ### CLASSES
 #########################
-
-
+"""
+___________________________/\/\______/\/\____/\/\__/\/\____/\/\____/\/\___
+_/\/\/\______/\/\/\/\____/\/\/\/\/\__/\/\____/\/\__________/\/\____/\/\___
+_____/\/\____/\/\__/\/\____/\/\______/\/\/\/\/\/\__/\/\____/\/\____/\/\___
+_/\/\/\/\____/\/\__/\/\____/\/\______/\/\____/\/\__/\/\____/\/\____/\/\___
+_/\/\/\/\/\__/\/\__/\/\____/\/\/\____/\/\____/\/\__/\/\/\__/\/\/\__/\/\/\_
+__________________________________________________________________________ 
+                                                                                                                                                           
+"""
 class AntHill:
 	"""
 		antaRNA AntHill. Can perform varoius actions! :)
@@ -1842,6 +2302,8 @@ class AntHill:
 	
 		self.params = Variables()
 		self.tmp_sequence = ""
+		self.tmp_path = []
+		self.tmp_terrain = ""
 		self.tmp_structure = ""
 		self.tmp_stats = []
 		self.tmp_result = []
@@ -1888,17 +2350,18 @@ class AntHill:
 			resets = 0
 			sequence = ""
 			current_structure = ""
+			path = []
 
 			Dscore = 100000
 			ds = 10000
 			dGC = 10000
 			dseq = 10000
-			best_solution = (sequence, current_structure, Dscore, ds, dGC, dseq)
-			best_solution_local = (sequence, current_structure, Dscore, ds, dGC, dseq)
+			best_solution = (sequence, current_structure, Dscore, ds, dGC, dseq, path)
+			best_solution_local = (sequence, current_structure, Dscore, ds, dGC, dseq, path)
 			
 			best_solution_since = 0
 			
-			
+			winning_terrain = nx.Graph()
 			
 			# IN CASE OF LP-MANAGEMENT
 			if self.params.modus == "MFE":
@@ -1908,7 +2371,6 @@ class AntHill:
 							self.params.Cstr = substr(lp + 1, self.params.Cstr, ".")
 							self.params.Cstr = substr(self.params.LP[lp] + 1, self.params.Cstr, ".")
 
-			init = 1
 			used_time = getUsedTime(start_time)
 			while criterion != met and used_time < self.params.time:
 				iteration_start = time.time()
@@ -1920,14 +2382,14 @@ class AntHill:
 				distance_structural_prev = ds
 				distance_GC_prev = dGC
 				distance_seq_prev = dseq
-				sequence, current_structure, Dscore , ds, dGC, dseq = sequence_info
-				
-				curr_solution = (sequence, current_structure, Dscore, ds, dGC, dseq)
+				sequence, current_structure, Dscore , ds, dGC, dseq , path = sequence_info
+				curr_solution = (sequence, current_structure, Dscore, ds, dGC, dseq, path)
 				# BEST SOLUTION PICKING
 				if self.params.improve_procedure == "h": # hierarchical check
 					# for the global best solution
 					if ds < best_solution[3] or (ds == best_solution[3] and dGC < best_solution[4]):
 						best_solution = curr_solution
+						winning_terrain = self.params.TerrainGraph.copy()
 						ant_no = 1
 					# for the local (reset) best solution
 					if ds < best_solution_local[3] or (ds == best_solution_local[3] and dGC < best_solution_local[4]):
@@ -1935,8 +2397,13 @@ class AntHill:
 						
 				elif self.params.improve_procedure == "s": #score based check
 					# store best global solution
+
 					if Dscore < best_solution[2]:
 						best_solution = curr_solution
+						if self.params.modus == "MFE":
+							winning_terrain = self.params.terrain
+						elif self.params.modus == "DP":
+							winning_terrain = self.params.TerrainGraph.copy()
 						ant_no = 1
 					# store best local solution for this reset
 					if Dscore < best_solution_local[2]:
@@ -1944,16 +2411,28 @@ class AntHill:
 
 				if self.params.verbose:
 					print "SCORE " + str(Dscore) + " Resets " + str(resets) + " #Ant " + str(global_ant_count) + " out of " + str(self.params.ants_per_selection)  + " cc " + str(convergence_counter)
-
-					print self.params.Cstr, " <- target struct" 
-					print best_solution[0] , " <- BS since ", str(best_solution_since), "Size of Terrrain:", len(self.params.terrain)
-					print best_solution[1] , " <- BS Dscore " + str(best_solution[2]) + " ds " + str(best_solution[3]) + " dGC " + str(best_solution[4]) + " dseq " + str(best_solution[5])+ " LP " + str(len(self.params.LP)) + " <- best solution stats"
-					print current_structure, " <- CS"
+					if self.params.modus == "MFE":
+						print self.params.Cstr, " <- target struct" 
+					# print best_solution[0] , " <- BS since ", str(best_solution_since), "Size of Terrrain:", len(self.params.terrain)
+					print best_solution[0] , " <- BS since ", str(best_solution_since), "Size of Terrrain:", 
+					if self.params.modus == "MFE":
+						print len(self.params.terrain)
+					elif self.params.modus == "DP":
+						print len(self.params.TerrainGraph)
+					if self.params.modus == "MFE":
+						print best_solution[1] , " <- BS"
+					print " Dscore " + str(best_solution[2]) + " ds " + str(best_solution[3]) + " dGC " + str(best_solution[4]) + " dseq " + str(best_solution[5])+ " LP " + str(len(self.params.LP)) + " <- best solution stats"
+					if self.params.modus == "MFE":
+						print current_structure, " <- CS"
 					print sequence,
 					print " <- CS", "Dscore", str(Dscore), "ds", ds, "dGC", dGC, "GC", getGC(sequence)*100, "Dseq", dseq
 
 				#### UPDATING THE TERRAIN ACCORDING TO THE QUALITY OF THE CURRENT BESTO-OUT-OF-k SOLUTION
-				updateTerrain(sequence, current_structure, ds, dGC, dseq, self.params) 
+				#print [self.params.TerrainGraph[e[0]][e[1]]["pheromone"]for e in self.params.TerrainGraph.edges() if "HIVE" not in e[0]]
+				updateTerrain(sequence, path, current_structure, ds, dGC, dseq, self.params) 
+				#print [self.params.TerrainGraph[e[0]][e[1]]["pheromone"]for e in self.params.TerrainGraph.edges() if "HIVE" not in e[0]]
+				# exit(1)
+
 
 				if self.params.verbose: print "Used time for one iteration", time.time() - iteration_start
 					
@@ -1961,6 +2440,9 @@ class AntHill:
 				# CONVERGENCE AND TERMINATION CRITERION MANAGEMENT
 				if inConvergenceCorridor(curr_solution[3], curr_solution[4], curr_solution[5], best_solution_local[3], best_solution_local[4], best_solution_local[5]):
 					convergence_counter += 1
+
+
+
 				if distance_structural_prev == ds and distance_GC_prev == dGC and distance_seq_prev == dseq:
 					convergence_counter += 1
 
@@ -1986,12 +2468,13 @@ class AntHill:
 					ant_no = 1
 					sequence = ""
 					current_structure = ""
+					path = []
 					counter = 0
 					Dscore = 100000
 					ds = 10000
 					dGC = 10000
 					dseq = 10000
-					best_solution_local = (sequence, current_structure, Dscore, ds, dGC, dseq)
+					best_solution_local = (sequence, current_structure, Dscore, ds, dGC, dseq, path)
 
 					convergence_counter = 0
 
@@ -2011,6 +2494,7 @@ class AntHill:
 				
 			duration  = used_time
 			self.tmp_sequence = best_solution[0]
+			self.tmp_path = best_solution[6]
 			if self.params.modus == "MFE":
 				self.tmp_structure = best_solution[1]	
 			self.tmp_stats.append("Ants:" + str(global_ant_count))
@@ -2024,14 +2508,76 @@ class AntHill:
 			self.tmp_stats.append("ds:" + str(best_solution[3]))
 			#self.tmp_stats.append("ds:" + str(getStructuralDistance(self.params, sequence, RNAfold, RNAfold_pattern)))
 			self.tmp_stats.append("dGC:" + str(best_solution[4]))
-			self.tmp_stats.append("GC:" + str(getGC(sequence)*100))
+			self.tmp_stats.append("GC:" + str(getGC(self.tmp_sequence)*100))
 
-			self.tmp_stats.append("dseq:" + str(best_solution[4]))
+			self.tmp_stats.append("dseq:" + str(best_solution[5]))
 			self.tmp_stats.append("L:" + str(len(self.tmp_sequence)))
 			self.tmp_stats.append("Time:" + str(duration))
 
 			self.retrieveResult(n)
-			
+
+			if self.params.plot == True:
+
+				# if self.params.modus == "MFE":
+
+
+				# 	with open(os.getcwd() + "/antaRNA_nodes", 'w') as TARGET:
+				# 		TARGET.write("Nodes;Id;Label\n")
+				# 		TARGET.write("\"XY.00\";\"XY.00\";\"XY.00\"\n")
+				# 		for node in  winning_terrain.keys(): # nodes
+				# 			pos, nucs = node.split(".")
+				# 			node = pos + "." + nucs[-1:]
+				# 			TARGET.write("\""+node + "\";\"" + node + "\";\"" + node + "\"\n")
+
+				# 	with open(os.getcwd() + "/antaRNA_edges", 'w') as TARGET:
+				# 	 	TARGET.write("Source;Target;Weight\n")
+				# 		for node in winning_terrain.keys():
+
+				# 			pos, nucs = node.split(".")
+
+				# 			if len(nucs) == 1:
+				# 				phero = winning_terrain[node][0]
+				# 				TARGET.write("XY.0;" + target + ";" + str(phero)+"\n")
+
+				# 			elif len(nucs) == 2:
+				# 				pos = int(pos)
+				# 				source = str(pos-1) + "." + nucs[0]
+				# 				target = str(pos) + "." + nucs[1]
+				# 				phero = winning_terrain[node][0]
+				# 				TARGET.write(source + ";" + target + ";" + str(phero)+"\n")
+					# 
+					# 	for edges in winning_terrain.edges():
+					# 		n1, n2 = edges
+					# 		pheromone = 1
+					# 		try:
+					# 			pheromone = winning_terrain[n1][n2]["pheromone"]
+					# 		except:
+					# 			pass
+					# 		TARGET.write(n1 + ";" + n2 + ";" + str(pheromone)+"\n")
+
+					# with open(os.getcwd() + "/antaRNA_nodes", 'w') as TARGET:
+					# 	TARGET.write("Nodes;Id;Label\n")
+					# 	for node in winning_terrain.nodes():
+					# 		TARGET.write("\""+node + "\";\"" + node + "\";\"" + node + "\"\n")
+
+				if self.params.modus == "DP":
+					#print self.params.GenerateSequence
+					#print self.tmp_path
+					with open(os.getcwd() + "/antaRNA_edges", 'w') as TARGET:
+						TARGET.write("Source;Target;Weight\n")
+						for edges in winning_terrain.edges():
+							n1, n2 = edges
+							pheromone = 1
+							try:
+								pheromone = winning_terrain[n1][n2]["pheromone"]
+							except:
+								pass
+							TARGET.write(n1 + ";" + n2 + ";" + str(pheromone)+"\n")
+					with open(os.getcwd() + "/antaRNA_nodes", 'w') as TARGET:
+						TARGET.write("Nodes;Id;Label\n")
+						for node in winning_terrain.nodes():
+							TARGET.write("\""+node + "\";\"" + node + "\";\"" + node + "\"\n")
+
 			
 		# CLOSING THE PIPES TO THE PROGRAMS
 		if (RNAfold is not None) :
@@ -2039,6 +2585,10 @@ class AntHill:
 
 
 	
+
+
+
+
 	def retrieveResult(self,col):
 		"""
 			Collect the results which have been produced by swarm function.
@@ -2105,6 +2655,15 @@ class AntHill:
 	
 class Variables:
 	"""
+	_/\/\____/\/\__________________________/\/\________________/\/\________/\/\___________________________
+	_/\/\____/\/\__/\/\/\______/\/\__/\/\__________/\/\/\______/\/\________/\/\______/\/\/\______/\/\/\/\_
+	_/\/\____/\/\______/\/\____/\/\/\/\____/\/\________/\/\____/\/\/\/\____/\/\____/\/\/\/\/\__/\/\/\/\___
+	___/\/\/\/\____/\/\/\/\____/\/\________/\/\____/\/\/\/\____/\/\__/\/\__/\/\____/\/\______________/\/\_
+	_____/\/\______/\/\/\/\/\__/\/\________/\/\/\__/\/\/\/\/\__/\/\/\/\____/\/\/\____/\/\/\/\__/\/\/\/\___
+	______________________________________________________________________________________________________
+
+	"""
+	"""
 		antaRNA Variables management.
 	"""
 	def __init__(self):
@@ -2150,12 +2709,13 @@ class Variables:
 		self.Cseqweight = 1.0
 		self.omega = 2.23
 		self.time = 600
+		self.plot = False
 		self.error = "0"
 
 		
 
 	def readArgParseArguments(self, args):
-		print args
+		#print args
 		self.modus = args.subparser_name
 		if self.modus == "MFE":
 			self.Cstr = args.Cstr
@@ -2201,7 +2761,7 @@ class Variables:
 		self.Cseqweight = args.Cseqweight
 		self.omega = args.omega
 		self.time = args.time
-		
+		self.plot = args.plot
 		
 	####################################################
 	# STRUCTURE AND SEQUENCE INTEGRITY CHECK FUNCTIONS
@@ -2267,6 +2827,7 @@ class Variables:
 			Checks if the constraints are compatible to each other
 		"""
 		self.BPstack, self.LP = getBPStack(self.Cstr, self.Cseq)
+		#print self.BPstack
 		for id1 in self.BPstack:  # key = (constraint , (pos, constraint)))
 			constr1 = self.BPstack[id1][0]
 			id2 = self.BPstack[id1][1][0]
@@ -2290,7 +2851,7 @@ class Variables:
 
 	def check_Accessibilities(self):
 		for i in self.accessibility:
-			print i
+			#print i
 			s1, s2, s3 = i
 			if s2 != "UB" and s2 != "B":
 				self.error = "AccessibilityError: Wrongly defined Accessiblity", s1, s2, s3, "->", s2
@@ -2320,9 +2881,9 @@ class Variables:
 				self.error = "DiffAccessibilityError: Constraint Length", len(s1), "is unequeal to Cstr length", self.length, "!"
 		
 	def check_Accuracies(self):
-		print self.accuracy
+		#print self.accuracy
 		for i in self.accuracy:
-			print i
+			#print i
 			s1, s2, s3 = i
 			if s2 != "UB" and s2 != "B":
 				self.error = "AccuracysError:: Wrongly defined Accuracy", s1, s2, s3, "->", s2
@@ -2509,7 +3070,9 @@ class Variables:
 				self.parseExtendedVariables()
 			if self.error == "0":
 				self.checkConstaintCompatibility()
-		
+
+
+
 		elif self.modus == "DP":
 			# print "Access", self.accessibility
 			# print "Accur", self.accuracy 
@@ -2594,15 +3157,15 @@ class Variables:
 		self.interconnections = {}
 		self.BPstack = {}
 		self.LP = {}
-		for i, j in self.all_requested_BP:
-			jj = (j, "".join(set(self.IUPAC[self.Cseq[j-1]])))
+		for i, j in self.all_requested_BP: # over all requested base pairs
+			jj = (j, "".join(set(self.IUPAC[self.Cseq[j-1]]))) # translate sequence oncstraint into regular pnucleotide set
 			
-			if i not in self.interconnections:
+			if i not in self.interconnections: # inititalize an interaction
 				self.interconnections[i] = [self.IUPAC[self.Cseq[i-1]], jj]
-			else:
+			else: # append an interaction to an already existing interaction constellation
 				self.interconnections[i].append(jj)
 				
-		to_be_visited = self.interconnections.keys()
+		to_be_visited = self.interconnections.keys() # list of all already known source positions within base pair interactions constellations
 
 		#print "Basis"
 		#for i in tmp_intercon.keys():
@@ -2613,7 +3176,7 @@ class Variables:
 		#for i in index:
 			#print i, self.interconnections[i]
 
-		while len(to_be_visited) != 0:
+		while len(to_be_visited) != 0: # visit all positions within base pair interaction constellations
 			i = 0
 			index = sorted(self.interconnections,key=lambda k: len(self.interconnections[k][0]))[i]
 			while index not in to_be_visited:
@@ -2644,6 +3207,10 @@ class Variables:
 						
 			to_be_visited.pop(to_be_visited.index(index))
 
+
+		
+
+
 		self.Interconnection_sets = []
 		for i in self.interconnections:
 			indices_pre = []
@@ -2665,29 +3232,58 @@ class Variables:
 			s = set(indices_post)
 			if s not in self.Interconnection_sets:
 				self.Interconnection_sets.append(s)
-				
+
+
+		# single_stranded_set = set([i for i in xrange(self.length)]) - set([i-1 for i in self.interconnections])
+		# for s in single_stranded_set:
+		# 	self.interconnections[s] = [self.IUPAC[self.Cseq[s]], s]
 
 	def detect_circles(self):
 		"""
 			Detects cyrcles in secondary structure construct definitions, which have been preparsed into interconnections previously.
 			Allows even sized cycles.
 		"""
-
+		self.interconnection_graphs = []
+		#print self.Interconnection_sets
 		for interconnection in self.Interconnection_sets:
-			if len(interconnection) > 2:
+			G = nx.Graph() # produce a new graph for an upcoming interaction set
+			for arc in self.all_requested_BP: # loop over all requested base pairs
+				if arc[0] in interconnection and arc[0] < arc[1]: # if an affiliated abse pair is in current interconnection
 
-				G = nx.Graph()
-				
-				for arc in self.all_requested_BP:
-					if arc[0] in interconnection and arc[0] < arc[1]:
-						G.add_edge(arc[0], arc[1])
-				cycles = nx.cycle_basis(G)
+					G.add_edge(arc[0], arc[1]) # add to graph G
+					G.node[arc[0]]["Cseq"] = self.interconnections[arc[0]][0]
+					G.node[arc[1]]["Cseq"] = self.interconnections[arc[1]][0]
+				if len(interconnection) > 2: # if it has at least two nodes
+					cycles = nx.cycle_basis(G) # extract the number of cycles within the graph
 
-				if cycles:
-					for cycle in cycles:
-						if len(cycle) % 2 != 0:
-							self.error = "Found odd cycle on structure positions %s, of size %s" % (', '.join(str(e) for e in interconnection), cycle_length)
+					if cycles: # if it has
+						for cycle in cycles:# iterate over cycles
+							if len(cycle) % 2 != 0: # if they have an odd number, raise the error.
+								self.error = "Found odd cycle on structure positions %s, of size %s" % (', '.join(str(e) for e in interconnection), cycle_length)
 
+		 	self.interconnection_graphs.append(G)
+
+
+		self.nodelist = set([])
+		if len(self.interconnection_graphs) > 0:
+			for graph in self.interconnection_graphs:
+				self.nodelist = self.nodelist | set(graph.nodes())
+		singletons = set([x for x in xrange(1,self.length + 1)]) - set(self.nodelist)
+		for s in list(singletons):
+			G=nx.Graph()
+			G.add_node(s)
+			G.node[s]["Cseq"] = self.interconnections[arc[1]][0]
+			self.interconnection_graphs.append(G)
+
+
+		# print self.nodelist
+		# for g in self.interconnection_graphs:
+		# 	print g.nodes()
+		# # 	for n in g.nodes(data=True):
+		# # 		print n
+		# # 	print g.edges()
+
+		# exit(1)
 
 	def checkInterconnections(self):
 		
@@ -2825,8 +3421,8 @@ class Variables:
 				self.accur.append((struct_info, constraint_system_1, value_1))
 
 		#del self.accuracy
-		if self.accur:
-			print "self.accur", self.accur
+		# if self.accur:
+		# 	print "self.accur", self.accur
 		
 		# DIFF_ACCURACY
 		self.diffaccur = []
@@ -2944,28 +3540,34 @@ class Variables:
 
 		if len(self.tGC) == 1 and type(self.tGC[0]) is float: # CASE Only one tGC value is defined, which needs to account for the whole terrain
 			tgc = self.tGC.pop()
-			self.tGC.append((tgc, 1, self.length))
+			self.tGC.append((tgc, 0, self.length - 1))
 			
 		for t in self.tGC:
 			if len(t) != 3:
 				self.error = "Error :: Not enough tGC and affiliated areas declarations"
 
 		if self.error == "0":
-			check_set = set(range(1, self.length + 1))
+			check_set = set(range(0, self.length ))
+
 			curr_set = set()
 			for i, area in enumerate(self.tGC): # CHECK if the areas are consistent and do not show disconnectivity.
+				#print i, area
 				v, s1, s2 = area
-				if i < 0 or i > 1:
+				if v < 0 or v > 1:
 					self.error = "Error: Chosen tGC > %s < not in range [0,1]" % (i)
 
 				if self.error == "0":
 					tmp_set = set(range(int(s1), int(s2 + 1)))
+					#print "curr_set", curr_set
+					#print "tmp_set", tmp_set
 					if len(curr_set.intersection(tmp_set)) == 0:
 						curr_set = curr_set.union(tmp_set)
 					else: 
 						self.error = "Error: Double defined tGC declaration area sector detected. Nucleotide positions", ", ".join(str(e) for e in curr_set.intersection(tmp_set)), "show(s) redundant tGC declaration"
 
-		if self.error == "0":				
+		if self.error == "0":			
+			#print "Curr", curr_set	
+			#print "Check", check_set
 			if len(curr_set.symmetric_difference(check_set)) != 0:
 				self.error = "Error: Undefined tGC area sectors detected. Nucleotide positions", ", ".join(str(e) for e in curr_set.symmetric_difference(check_set)), "is/are not covered."
 		
@@ -2973,7 +3575,7 @@ class Variables:
 			if self.error == "0":
 				v, start, stop = tgc
 				v = '%.6f' % (v)
-				tmp_sc = self.Cseq[start:stop + 1]
+				# tmp_sc = self.Cseq[start:stop + 1]
 				minGC, maxGC = self.reachableGC()
 				if v > maxGC or v < minGC:
 					self.error = "WARNING: Chosen target GC %s content is not reachable. The selected sequence constraint contradicts the tGC constraint value. Sequence Constraint allows tGC only to be in [%s,%s]" % (v, minGC, maxGC) 
