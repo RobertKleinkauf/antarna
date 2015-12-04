@@ -22,6 +22,9 @@ import networkx as nx
 ##############################
 
 def GC(string):
+	"""
+		argparse type definition of GC value
+	"""
 	#print ">"+string+"<"
 	m = re.match('^\s*(\d+\.\d+):?(\d+)?\s*?-?\s*?(\d+)?\s*?$', string)
 
@@ -41,6 +44,9 @@ def GC(string):
 		return (tGC)
 	
 def AccuracyFeature(string):
+	"""
+		argparse type definition of accuracy feature
+	"""
 	m = re.match('^\s*([.()]*)\s*(\w+)\s*(\d+\.?\d+)\s*$', string)
 	if m is None:
 		print "'" + string + "' is not a valid AccuracyFeature input of type STRUCTURE STRING STRING/FLOAT"
@@ -52,6 +58,9 @@ def AccuracyFeature(string):
 	return ( (s1, s2, s3) )
 	
 def AccessibilityFeature(string):
+	"""
+		argparse type definition of accessibility feature
+	"""
 	m = re.match('^\s*([.x]*)\s*(\w+)\s*(\d+\.?\d+)\s*$', string)
 	if m is None:
 		print "'" + string + "' is not a valid AccessibilityFeature input of type STRUCTURE STRING STRING/FLOAT"
@@ -63,10 +72,12 @@ def AccessibilityFeature(string):
 		print "defined accessibility", s1, "is not within one stretch! Please reconsider."
 		exit(1)
 
-	#print (s1, s2, s3)
 	return ( (s1, s2, s3) )
 	
 def DiffAccuracyFeature(string):
+	"""
+		argparse type definition of differential accuracy feature
+	"""
 	m = re.match('^\s*([.()]*)\s*(\w+)\s*(\d+\.?\d+)\s*(\w+)\s*(\d+\.?\d+)\s*$', string)
 	if m is None:
 		print "'" + string + "' is not a valid DiffAccuracyFeature input of type STRUCTURE STRING FLOAT STRING FLOAT"
@@ -79,6 +90,9 @@ def DiffAccuracyFeature(string):
 	return ( (s1, s2, s3, s4, s5) )
 	
 def DiffAccessibilityFeature(string):
+	"""
+		argparse type definition of differential accessibility feature
+	"""
 	m = re.match('^\s*([.x]*)\s*(\w+)\s*(\d+\.?\d+)\s*(\w+)\s*(\d+\.?\d+)\s*$', string)
 	if m is None:
 		print "'" + string + "' is not a valid DiffAccessibilityFeature input of type STRUCTURE STRING FLOAT STRING FLOAT"
@@ -113,16 +127,22 @@ def parseGC(string):
 		return (tGC)
     
 def convert_arg_line_to_args(arg_line):
-    for arg in arg_line.split():
-        if not arg.strip():
-            continue
-        yield arg
+	"""
+		argparse function to parse the variables
+	"""
+	for arg in arg_line.split():
+		if not arg.strip():
+			continue
+		yield arg
         
 #####################
 # SUPPORT FUNCTIONS
 #####################
 
 def isfloat(value):
+	"""
+		checks type of float status
+	"""
 	try:
 		float(value)
 		return True
@@ -302,9 +322,6 @@ def getStructStacks(structure_queries):
 
 	return s_q
     
-
-
-	
 	
 ############################################
 # IUPAC LOADINGS AND NUCLEOTIDE MANAGEMENT
@@ -369,10 +386,8 @@ def compareLists(l1, l2):
 
 def getLP(BPSTACK):  
 	"""
-	Retreives valid lonley base pairs from a base pair stack
+		Retreives valid lonley base pairs from a base pair stack
 	"""
-	#20 ('N', (>BLOCK<, 'N'))
-
 	# getting single base pairs
 	stack = {}
 	LP = {}
@@ -495,15 +510,15 @@ def getbpStack(structure):
 ############################################
 
 def maprange( a, b, s):
-  """
-   Mapping function
-  """
-  (a1, a2), (b1, b2) = a, b
-  return  b1 + ((s - a1) * (b2 - b1) / (a2 - a1))
+	"""
+		Mapping function
+	"""
+	(a1, a2), (b1, b2) = a, b
+	return  b1 + ((s - a1) * (b2 - b1) / (a2 - a1))
 
 def getConstraint(edge, args):
 	"""
-	Dependend on the situation in the constraint an the respective sequence section, setting wether a specific constraint can be given or not (for that sequence section)
+		Dependend on the situation in the constraint an the respective sequence section, setting weather a specific constraint can be given or not (for that sequence section)
 	"""
 	# terrain_element :: transition element / sequence section under dispute
 	# id1 :: id of the position of the caharacter to which the transition is leading to
@@ -559,35 +574,25 @@ def getConstraint(edge, args):
 
 		if check_nuc == "": # transition is within the graph,indicating a base pair interaction, no consequtive nucleotide...
 			if isCompatible(targetNucleotide0, targetNucleotide, args.IUPAC_compatibles): # the specific base pair is possible, the edge will be further inspected. for constraints
-				# 
-				# get set of allowed nucleotides in position i
-				# get set of all constraints to po
-				#print "---"
+
 				id1 += 1 # the interconnections are 1 based
 				if id1 in args.interconnections: # nuc at pos id1 has some requested interaction
-					#print id1, "In interconnections", args.interconnections[id1]
 					constr1 = args.Cseq[id1-1]
 					if constr1.islower():
 						return 1
 					else:
 						check = ""
 						c1 = args.interconnections[id1][0]
-						#print c1
 						if targetNucleotide in c1:
-							#print targetNucleotide, "in C1"
 							for i in xrange(1,len(args.interconnections[id1])):
 								c2 = "".join(set("".join([args.IUPAC_reverseComplements[i] for i in args.interconnections[id1][i][1].upper()])))
-								#print targetNucleotide, "c2",c2
 								if targetNucleotide not in c2:
-									#print 0
 									return 0
-							#print 1
 							return 1
 						else:
 							return 0
 				else: # case of no base pair
 					constr1 = args.Cseq[id1-1]
-					#print id1, constr1
 					if constr1.islower():
 						return 1
 					else:
@@ -601,31 +606,12 @@ def getConstraint(edge, args):
 		else: # emitting graph entry point
 			if check_id + 1 in args.interconnections: # nucleotide is starting point of base pair interaction(s)
 				targetNucleotides = set(args.interconnections[check_id + 1][0])
-				#print check_nuc, targetNucleotides, 
 				if check_nuc in targetNucleotides:
-					#print "1"
 					return 1
 				else:
-					#print "0"
 					return 0
 			else: # unbound nucleotide situation
 				return 1
-
-
-## REGULAR INIT TERRAIN FUNCTION
-# def initTerrain(args): 
-# 	"""
-# 		Initialization of the terrain graph  in equidistant mode.
-# 		Vertices are modeled implicitly.
-# 	"""
-# 	nt = ["A","C","G","U"] 
-# 	nt2 = ["AA","AC","AG","AU","CA","CC","CG","CU","GA","GC","GG","GU","UA","UC","UG","UU"] # Allowed dinucleotides
-
-# 	pathlength = 1
-# 	pheromone = 1
-
-
-
 
 def initTerrain(args): 
 	"""
@@ -638,7 +624,6 @@ def initTerrain(args):
 	pheromone = 1
 
 	if args.modus == "MFE":
-
 		e = {}
 		for p in xrange(args.length):
 			if p == 0:
@@ -654,13 +639,12 @@ def initTerrain(args):
 		args.TerrainGraph.add_node("HIVE")
 		args.GenerateSequence = []
 		graph_count = 0
+
 		for graph in args.interconnection_graphs: # for all subgraphs
-			#print "---"
 			start_node = random.choice(graph.nodes()) - 1 # randomly select a startpoint of the subgraph
 			outpost = str(start_node)+".XY" # label of entry path to outpost subgraph
 			args.TerrainGraph.add_edge("HIVE", outpost) # generate entry path to outpost
-			#print "DEALING START NODE", start_node
-			#args.GenerateSequence.append(("HIVE", outpost))
+
 			for nt in NT: # generate all pathes from  outpost to first randomly chosen emitting battery of nodes
 
 				target_node = "%s.%s"%(start_node,nt)
@@ -671,10 +655,9 @@ def initTerrain(args):
 			visited = []
 			visit = [curr_node + 1]
 			walk_order = []
-			#print "PLANNED START:", curr_node 
+
 			while len(visited) < graph.order():
 				c_node = visit.pop()
-				#print "ARRIVING AT:", c_node - 1
 				if c_node not in visited:
 					visited.append(c_node)
 				neighbor = ""	
@@ -683,7 +666,6 @@ def initTerrain(args):
 				except:
 					pass
 				if walk_order != []: # node is neighbor of an emmitting node which was visited before...
-					#print "create edges from", walk_order[-1] - 1, "to", c_node - 1
 					for nt1 in NT:
 						start_node = str(walk_order[-1]-1) + "." + nt1
 						for nt2 in NT:
@@ -692,93 +674,12 @@ def initTerrain(args):
 					args.GenerateSequence.append((str(walk_order[-1]-1), str(c_node - 1)))
 					
 				if neighbor != "":
-					#print "NEXT VISIT:", neighbor
 					walk_order.append(c_node)
 					visit = [neighbor]
 				else:
 					if walk_order != []:
 						go_back = walk_order.pop()
 						visit = [go_back]
-				#print "GOING BACK TO:", go_back
-
-	#print args.TerrainGraph.nodes()
-		# visited = [outpost, "HIVE"]
-		# visit = [start_node]
-
-
-		# while len(visit) > 0:
-		# 	i = visit.pop(0)
-		# 	print "from", i
-		# 	neighbors = graph.neighbors(i)
-
-		# 	for neighbor in neighbors:
-		# 		if neighbor not in visit and neighbor not in visited:
-		# 			print neighbor
-
-		# 			# produce corresponding edges
-		# 			produce edges
-
-		# 			visit.append(neighbor)
-		# 	visited.append(i)
-					#args.TerrainGraph.add_edge("%s.%s"%(start_node,nt), , pheromone = pheromone, length = pathlength))
-
-		# graph_count += 1
-		# for n in graph.nodes():
-		# 	print n
-
-	#exit(1)
-	# print args.TerrainGraph.nodes()
-	# for hiveneighbor in args.TerrainGraph.neighbors("HIVE"):
-	# 	print "---"
-	# 	print hiveneighbor
-	# 	for areas in args.TerrainGraph.neighbors(hiveneighbor):
-	# 	#print n, args.TerrainGraph.node(n).edges()
-	# 		if areas != "HIVE":
-	# 			for local in args.TerrainGraph.neighbors(areas):
-	# 				print areas, local, args.TerrainGraph[areas][local]
-	# 				# print areas, args.TerrainGraph[hiveneighbor][areas][local]
-	# 		# , args.TerrainGraph.neighbors(neigh)
-	# 	#print graph.nodes(data=True)
-	# 	#print graph.edges()
-
-	# #print args.TerrainGraph["1.A"]["15.C"]["length"]
-
-	# exit(1)
-
-	
-
-
-
-	# e = {}
-	# pathlength = 1
-	# pheromone = 1
-	# for p in xrange(args.length):
-	# 	if p == 0:
-	# 		for i in nt:
-	# 			e["%s.%s"%(p,i)] = (pheromone, pathlength)
-	# 	elif p > 0:
-	# 		for n in nt2:
-	# 			e["%s.%s"%(p,n)] = (pheromone, pathlength)
-	# args.terrain = e
-
-
-
-
-
-
-# def applyTerrainModification(args):
-# 	"""
-# 		Dependent on the input, this function modifies the terrain accordingly. 
-# 		It reflects the pheromone and path length adjustment.
-# 		Directly affected edges and their implicit neighbor edges are removed 
-# 		from the graph.
-# 	"""
-# 	actGC = {}
-# 	for i in args.GC:
-# 		v, s1, s2 = i
-# 		for j in range(s1-1,s2):
-# 			actGC[j] = v
-# 	
 
 def applyTerrainModification(args):
 	"""
@@ -796,7 +697,6 @@ def applyTerrainModification(args):
 		for j in range(s1,s2 + 1):
 			actGC[j] = v
 	dels = []
-	#print args.interconnections
 
 	if args.modus == "MFE":	
 		dels = []
@@ -804,10 +704,7 @@ def applyTerrainModification(args):
 			pheromone, pathlength = args.terrain[terrainelement]
 			
 			pheromone = getConstraint(terrainelement,args)
-			
-			#pathlength = getConstraint(terrainelement, args) # is redundant, since the pheromone would have been dealt with this info already...
 			pathlength = applyGCcontributionPathAdjustment(pathlength, actGC, terrainelement)
-			
 			
 			if pheromone * pathlength == 0: dels.append(terrainelement)
 			args.terrain[terrainelement] = (pheromone, pathlength,[])
@@ -856,7 +753,6 @@ def applyTerrainModification(args):
 		for edge in args.TerrainGraph.edges():
 			if "HIVE" not in edge:
 				x, y = edge
-
 				pheromone = args.TerrainGraph[x][y]["pheromone"]
 				pathlength = args.TerrainGraph[x][y]["length"]
 				
@@ -871,52 +767,6 @@ def applyTerrainModification(args):
 		for edge in dels:
 			x, y = edge
 			args.TerrainGraph.remove_edge(x, y)
-
-	# exit(1)
-
-	#for edge in args.TerrainGraph.edges():
-	#	if "HIVE" not in edge :
-	#		print edge
-	# exit(1)
-	# further_dels = {}
-	# for terrainelement in sorted(dels):
-	# 	pos, nucs = terrainelement.split(".")
-	# 	if int(pos) < len(args.Cseq)-1:
-	# 		to_nt = nucs[-1:]
-	# 		successor_pos = int(pos) + 1
-	# 		for i in ["A", "C", "G", "U"]:
-	# 			del_element = str(successor_pos) + "." + to_nt + i
-	# 			further_dels[del_element] = 1
-	# 	further_dels[terrainelement] = 1
-	# # deleting the inbound and outbound edges, which are forbidden
-	# for terrainelement in further_dels:
-	# 	del args.terrain[terrainelement]
-	# # allocate the appropriate children of edges 
-	# for terrainelement in args.terrain:
-	# 	pheromone, pathlength, children = args.terrain[terrainelement]
-	# 	pos, nucs = terrainelement.split(".")
-	# 	if int(pos) < args.length:
-	# 		to_nt = nucs[-1:]
-	# 		successor_pos = int(pos) + 1
-	# 		for i in ["A", "C", "G", "U"]:
-	# 			if str(successor_pos) + "." + to_nt + i in args.terrain:
-	# 				children.append(str(successor_pos) + "." + to_nt + i)
-	# 	args.terrain[terrainelement] = (pheromone, pathlength,children)
-	# # ADDING THE START EDGES
-	# starts = []
-	# for i in ["A", "C", "G", "U"]:
-	# 	if str(0) + "." + i in args.terrain:
-	# 		starts.append(str(0) + "." + i)
-	# args.terrain["00.XY"] = (1, 1, starts)
-	
-	# # CHECK IF THERE ARE EMPTY SUCCESSOR INFORMATION WITHIN THE SEQUENCE
-	# for terrainelement in args.terrain:
-	# 	pher, length, successors = args.terrain[terrainelement]
-	# 	id1 = terrainelement.split(".")[0]
-	# 	#print id1 ,len(args.Cseq), len(successors)
-	# 	if id1 < len(args.Cseq) and len(successors) == 0:
-	# 		args.error = "TerrainError: No successors detected where some should have appeared! %s %s" % (terrainelement, args.terrain[terrainelement])
-		
 	
 def applyGCcontributionPathAdjustment(pathlength, actGC, edge):
 	"""
@@ -940,159 +790,74 @@ def applyGCcontributionPathAdjustment(pathlength, actGC, edge):
 	elif nt == "G" or nt == "C":
 		pathlength = pathlength * maprange( (1, 0) , (lower, upper), actGC[int(position)])
 	return pathlength
-
-
-  
-def printTerrain(terrain):
-	"""
-		Prints a given terrain
-	"""
-	#print sorted(terrain.keys())
-	tmp_i = "0"
-	tmp_c = 0
-	terrain = terrain[0]
-	
-	for a, i in enumerate(sorted(terrain.keys())):
-		#print a
-		if i.split(".")[0] != tmp_i:
-			print "\nElements:", tmp_c,"\n#########################\n", i, terrain[i]
-			
-			tmp_c = 1
-			tmp_i = i.split(".")[0]
-		else:
-			print i, terrain[i]
-			tmp_c += 1
-			
-	print "\nElements:", tmp_c
-	print "#########################"
-	print len(terrain)
 	
 ########################################
 # SEQUENCE ASSEMBLY a.k.a. The ANTWALK
 ########################################
 
-
-
-def prepare_selection(args, allowed_nt, prev_edge):
-	### load all legal steps for a selection to selection_set
-	summe = 0
-	selection_set = []
-	for edge in args.terrain[prev_edge][-1]:	
-		if edge[-1:] in allowed_nt:
-			#print edge, 
-			pheromone, PL, children = args.terrain[edge]
-			value = ((float(pheromone * args.alpha)) + ((1/float(PL)) * args.beta))
-			summe += value
-			#print (value, edge)
-			selection_set.append((value, edge))
-	selection_set = (summe, selection_set)
-	return  selection_set
-
 def checkSelection(sel):
+	"""
+		Check the selection for the presence of elements
+	"""
 	if len(sel[1]) == 0:
 		print "No legal nucleotides to fill in here. Please check your sequence constraint!"
 		exit(1)
 
-def updateSequenceConstraint(sequenceConstraint, graph, position, selected_nucleotide, iupac_complements):
-
-	visited = []
-	visit = [(position, selected_nucleotide)]
-	#print "----"
-	while len(visit)>0:
-
-		#print "Visited", visited
-		#print "Visit", visit
-
-		l = visit.pop(0)
-		#print "Check", l, 
-		i, nucleotide = l
-		if len(sequenceConstraint[i]) > 1:
-			#print "Updating"
-			sequenceConstraint[i] = nucleotide
-		#else:
-			#print "Good"
-		#print i + 1, graph.neighbors(i+1)
-		for n in graph.neighbors(i+1):
-			if not n in visited:
-				if n != position + 1:
-					if len(sequenceConstraint[n - 1]) > 1:
-						visited.append(n)
-						for nucleotid in list(nucleotide):
-							#print type(iupac_complements[nucleotid]), iupac_complements[nucleotid]
-							complement_nucleotides = iupac_complements[nucleotid]
-							#print "complement_nucleotides of poition ", i , list(complement_nucleotides)
-							present_constraint = list(sequenceConstraint[n - 1])
-							#print "present sequence constraint of position ", n - 1, present_constraint
-							new_constraint = "".join([c for c in list(complement_nucleotides) if c in present_constraint])
-							#print "New Constraint", (n-1, new_constraint)
-							visit.append((n-1, new_constraint))
-					#else:
-						#print "Already single nucleotide constraint", n - 1, sequenceConstraint[n - 1]
-	#print "END----"
-
-
-# def fillSequence(args, sequence, path, j, Cseq_allowed_nt, prev_edge, graph):
-
-# 	selection = prepare_selection(args, Cseq_allowed_nt, prev_edge)
-# 	print selection
-# 	checkSelection(selection)
-# 	prev_edge = pickNucleotide(selection)
-
-# 	print "Selected Edge", prev_edge
-# 	selected_nucleotide = prev_edge[-1:]
-# 	if graph.order() > 0:
-# 		updateGraph(graph, j, selected_nucleotide, args.IUPAC_reverseComplements)
-# 	return selected_nucleotide, prev_edge
-def pickNucleotide(selection):
+def pickNucleotide(args, selection):
 	"""
 		Selects a step within the terrain
 	"""
-	summe, tmp_steps = selection
-	if len(tmp_steps) == 1:
-		return tmp_steps[0][1] # returning the nucleotide of the only present step
-	else:
-		rand = random.random() # draw random number
-		mainval = 0
-		for choice in xrange(len(tmp_steps)):
-			val, label = tmp_steps[choice]
-			mainval += val/float(summe)
-			if mainval > rand: # as soon, as the mainval gets larger than the random value the assignment is done
-				return label
+	# print selection
+	# checkSelection(selection)
 
-def pickEdgeFromSelection(args, selection):
-	summe = 0
-	selection_set = []
-	for edge in selection:
-			#print edge
-			x, y = edge
-			#print args.TerrainGraph[x][y]
+	if args.modus == "MFE":
+		summe, tmp_steps = selection
+		if len(tmp_steps) == 1:
+			return tmp_steps[0][1] # returning the nucleotide of the only present step
+		else:
+			rand = random.random() # draw random number
+			mainval = 0
+			for choice in xrange(len(tmp_steps)):
+				val, label = tmp_steps[choice]
+				mainval += val/float(summe)
+				if mainval > rand: # as soon, as the mainval gets larger than the random value the assignment is done
+					return label
 
-			pheromone = args.TerrainGraph[x][y]["pheromone"] 
-			pathlength = args.TerrainGraph[x][y]["length"]
+	elif args.modus == "DP":
 
-			value = ((float(pheromone * args.alpha)) + ((1/float(pathlength)) * args.beta))
-			summe += value
-			selection_set.append((value, edge))
+		summe = 0
+		selection_set = []
+		for edge in selection:
+				x, y = edge
 
-	if len(selection_set) == 1:
-		return selection_set[0][1] # returning the nucleotide of the only present step
-	else:
-		rand = random.random() # draw random number
-		mainval = 0
-		for choice in xrange(len(selection_set)):
-			val, label = selection_set[choice]
-			mainval += val/float(summe)
-			if mainval > rand: # as soon, as the mainval gets larger than the random value the assignment is done
-				return label
+				pheromone = args.TerrainGraph[x][y]["pheromone"] 
+				pathlength = args.TerrainGraph[x][y]["length"]
+
+				value = ((float(pheromone * args.alpha)) + ((1/float(pathlength)) * args.beta))
+				summe += value
+				selection_set.append((value, edge))
+
+		if len(selection_set) == 1:
+			return selection_set[0][1] # returning the nucleotide of the only present step
+		else:
+			rand = random.random() # draw random number
+			mainval = 0
+			for choice in xrange(len(selection_set)):
+				val, label = selection_set[choice]
+				mainval += val/float(summe)
+				if mainval > rand: # as soon, as the mainval gets larger than the random value the assignment is done
+					return label
 
 def getSequenceConstraint(args):
-		args.sequenceConstraint = {}
-		for i in xrange(args.length):
-			#print i,
-			if i + 1 in args.interconnections:
-				args.sequenceConstraint[i] = args.interconnections[i + 1][0]
-			else:
-				args.sequenceConstraint[i] = args.IUPAC[args.Cseq[i]]
+	"""
+		Prerpare and renw the sequence constraint for the respective positions in Cseq
+	"""
+	args.sequenceConstraint = {}
+	for i in xrange(args.length):
+		if i + 1 in args.interconnections:
+			args.sequenceConstraint[i] = args.interconnections[i + 1][0]
+		else:
+			args.sequenceConstraint[i] = args.IUPAC[args.Cseq[i]]
 
 def getSequence(args):
 	"""
@@ -1100,48 +865,38 @@ def getSequence(args):
 		of the base pairs GU, GC and AT
 	"""
 
-
 	nt = ["A","C","G","U"]
 	path = ["_"] * args.length
-
 
 	if args.modus == "MFE":
 
 		prev_edge = "00.XY"
 		sequence = ""
-		#print 
-		#exit(1)
+
 		while len(sequence) < args.length:
-			##print len(sequence) , len(args.Cstr)
 			coming_from = sequence[-1:]
 			summe = 0
 			steps = []
 			i = len(sequence)
 			allowed_nt = "ACGU"
 			# base pair closing case check, with subsequent delivery of a reduced allowed nt set
-			#print args.BP
-			#exit(1)
+
 			if i in args.BPstack:
-				#print i, args.BP
 				if i > args.BPstack[i][1][0]:
 					jump =  args.BPstack[i][1][0]
 					nuc_at_jump = sequence[jump]
 					allowed_nt = args.IUPAC_reverseComplements[nuc_at_jump]
-					#print args.BP[i][1][0], i, nuc_at_jump, "->", allowed_nt
-				#allowed_nt = complementBase(nuc_at_jump)
+
 			for edge in args.terrain[prev_edge][-1]:
 				
 				if edge[-1:] in allowed_nt:
-					#print edge, 
 					pheromone, PL, children = args.terrain[edge]
 					value = ((float(pheromone * args.alpha)) + ((1/float(PL)) * args.beta))
 					summe += value
-					#print (value, edge)
 					steps.append((value, edge))
-			#print ""
+			
 			if len(steps) > 0:
-				prev_edge = pickNucleotide( (summe, steps) )
-			#print "Selected Edge", prev_edge
+				prev_edge = pickNucleotide(args, (summe, steps) )
 				pos, edge = prev_edge.split(".")
 				sequence += edge[-1:]
 				pos = int(pos)
@@ -1157,19 +912,11 @@ def getSequence(args):
 		sequence = ["_"] * args.length
 		
 		getSequenceConstraint(args)
-		# print args.TerrainGraph.nodes()
-		# for graph in args.interconnection_graphs:
-		# 	print graph.nodes()
 
 		for i, step in enumerate(args.GenerateSequence):
-			#print step
+
 			source_node, target_node = step
-			#print step
-			#if "XY" in source_node:
-			# if "XY" not in source_node: # managing the source node. It has the required info in its label and gets nucleotode info from the established sequence
-			# preparing a selection of target nodes.
-			#	 s = forbidden nucleotides due to complementarily set nucleotides in interacting sequence positions
-			#neighbors_set = set(args.TerrainGraph.neighbors(source_node)) # actual neighbors of source_node
+
 			legal_target_node_nucleotides = list(args.sequenceConstraint[int(target_node)]) # get the legal list of nucleotides.due to sequence constraint
 			if "XY" not in source_node:
 				complements = list(args.IUPAC_reverseComplements[sequence[int(source_node)]])
@@ -1177,78 +924,14 @@ def getSequence(args):
 				source_node = source_node + "." + sequence[int(source_node)]
 			target_nodes = [str(target_node) + "." + n for n in legal_target_node_nucleotides]
 			legal_edges = [ (source_node, s) for s in target_nodes]
-			#print source_node, legeal_edges, 
-			 # if args.TerrainGraph[source_node][s]["status"] == "active"
-			# print source_node, target_node, selection
-			edge = pickEdgeFromSelection(args, legal_edges)
+
+			edge = pickNucleotide(args, legal_edges)
 			position, emission = edge[1].split(".")
-			# position = int(position)
-			# #print emission
-			# for graph in args.interconnection_graphs:
-			# 	if position + 1 in graph.nodes():
-			# 		#print "update sequeceoncstraint of "
-			# 		#print position, "->", position + 1
-			# 		#print graph.nodes()
-			# 		updateSequenceConstraint(args.sequenceConstraint, graph, position, emission, args.IUPAC_reverseComplements)
+
 			sequence[int(position)] = emission
 			path[int(position)] = edge
 
 		return "".join(list(sequence)) , path
-		# print edge, "Emitting Nucleotide:", emission
-	#print "".join(list(sequence))
-	#exit(1)
-	#print "0123456789012345678901234567890"
-	#print "".join(sequence)
-
-	#exit(1)
-	# while len(visit_q) > 0:
-	# 	i = visit_q.pop(0) - 1
-	# 	j = i+1
-	# 	print "================================================================"
-
-	# 	print "Sequence Position", i,
-	
-	# 	if j in args.nodelist: # position is involved in a base pair interaction (n >= 2)
-	# 		print "->" , j, "is in a base pairing situation"
-
-	# 		for graph in args.interconnection_graphs:
-	# 			if j in graph:
-
-	# 				neigbors = graph.neighbors(j)
-	# 				for n in neigbors:
-	# 					if n not in visited_q and n not in visit_q:
-	# 						visit_q.append(n)
-	# 				print j, visit_q
-	# 				Cseq_allowed_nt = graph.node[j]["Cseq"]
-	# 				visited_q.append(j)
-	# 				# if j > 1:
-	# 				# 	prev_edge = path[i - 1]
-	# 				nucleotide, edge = fillSequence(args, sequence, path, j, Cseq_allowed_nt, prev_edge, graph)
-	# 				sequence[i] = nucleotide
-	# 				path[i] = edge
-
-	# 	else: #Drawing sequence constraint from Cseq
-	# 		print "Drawing sequence constraint from Cseq"
-	# 		Cseq_allowed_nt = args.IUPAC[args.Cseq[i]]
-	# 		tmp_graph = nx.Graph()
-	# 		# if j > 1:
-	# 		# 	prev_edge = path[i - 1]
-	# 		nucleotide, edge = fillSequence(args, sequence, j, Cseq_allowed_nt, prev_edge, graph)
-	# 		sequence[i] = nucleotide
-	# 		path[i] = edge
-	# 	if len(visit_q) == 0:
-	# 		print "get new start:"
-	# 		new = "".join(list(sequence)).find("_")
-	# 		if new != -1:
-	# 			print new 
-	# 			visit_q.append(new + 1)
-	# 	print "".join(list(sequence))
-	# print "0123456789012345678901234567890"
-	# print "".join(list(sequence)) 
-	# print "".join(list(sequence))
-	# print path
-
-	
 	
 def getSequenceFromSelection(args, RNAfold, RNAfold_pattern):
 	"""
@@ -1681,7 +1364,7 @@ def getGC(sequence):
 	
 def getGCDistance( sequence, args):
 	"""
-	Calculate the pseudo GC content distance 
+		Calculate the pseudo GC content distance 
 	"""
 	D = 0
 	for tGC in args.GC:
@@ -1709,7 +1392,7 @@ def getGCDistance( sequence, args):
 
 def getSequenceEditDistance(Cseq, sequence):
 	"""
-	Calculate sequence edit distance of a solution to the constraint
+		Calculate sequence edit distance of a solution to the constraint
 	"""
 	IUPAC = {"A":"A", "C":"C", "G":"G", "U":"U", "R":"AG", "Y":"CU", "S":"GC", "W":"AU","K":"GU", "M":"AC", "B":"CGU", "D":"AGU", "H":"ACU", "V":"ACG", "N":"ACGU"}         
 	edit = 0
@@ -1725,7 +1408,7 @@ def getSequenceEditDistance(Cseq, sequence):
 
 def evaporate(args): 
 	"""
-	Evaporate the terrain's pheromone trails
+		Evaporate the terrain's pheromone trails
 	"""
 	if args.modus == "MFE":
 		c = 1
@@ -1929,7 +1612,7 @@ def transformTransitions(transitions):
 
 def updateValue(distance, correction_term, omega):
 	"""
-	Retrieves a distance dependend pheromone value
+		Retrieves a distance dependend pheromone value
 	"""
 	if correction_term == 0:
 		return 0
@@ -1972,9 +1655,9 @@ def inConvergenceCorridor(d_struct, d_gc, d_seq, BS_d_struct, BS_d_gc, BS_d_seq)
 
 def getGCSamplingValue(GC, tGCmax, tGCvar):
 	"""
-	Returns a suitable GC value, dependend on the user input: Either returning the single GC value,
-	which the user entered, or a smpled GC value
-	from a designated distribution in it's interavals
+		Returns a suitable GC value, dependend on the user input: Either returning the single GC value,
+		which the user entered, or a smpled GC value
+		from a designated distribution in it's interavals
 	"""
 	returnval = 0
 	if tGCmax == -1.0 and tGCvar == -1.0: # regular plain tGC value as requested 
@@ -2007,7 +1690,7 @@ def setGC(args):
 
 def exe():
 	"""
-	MAIN EXECUTABLE WHICH PARSES THE INPUT COMMAND LINE
+		MAIN EXECUTABLE WHICH PARSES THE INPUT COMMAND LINE
 	"""
 
 	argument_parser = argparse.ArgumentParser(
@@ -2715,6 +2398,9 @@ class Variables:
 		
 
 	def readArgParseArguments(self, args):
+		"""
+			Read the argparse arguments
+		"""
 		#print args
 		self.modus = args.subparser_name
 		if self.modus == "MFE":
@@ -2850,6 +2536,9 @@ class Variables:
 		self.Cseq = S
 
 	def check_Accessibilities(self):
+		"""
+			Check made accessibility statements
+		"""
 		for i in self.accessibility:
 			#print i
 			s1, s2, s3 = i
@@ -2861,6 +2550,9 @@ class Variables:
 				self.error = "AccessibilityError Constraint Length", len(s1), "is unequeal to Cstr length", self.length, "!"
 
 	def check_Diff_Accessibilities(self):
+		"""
+			Check made differential accessibility statements
+		"""
 		for i in self.diff_accessibility:
 			s1, s2,s3, s4, s5 = i
 			if not isfloat(s3):
@@ -2881,6 +2573,9 @@ class Variables:
 				self.error = "DiffAccessibilityError: Constraint Length", len(s1), "is unequeal to Cstr length", self.length, "!"
 		
 	def check_Accuracies(self):
+		"""
+			Check made accuraciy statements
+		"""
 		#print self.accuracy
 		for i in self.accuracy:
 			#print i
@@ -2893,6 +2588,9 @@ class Variables:
 				self.error = "AccuracyError: Constraint Length", len(s1), "is unequeal to Cstr length", self.length, "!"
 
 	def check_Diff_Accuracies(self):
+		"""
+			Check made differential accuracy statements
+		"""
 		for i in self.diff_accuracy:
 			s1, s2,s3, s4, s5 = i
 			if not isfloat(s3):
@@ -3286,7 +2984,9 @@ class Variables:
 		# exit(1)
 
 	def checkInterconnections(self):
-		
+		"""
+			Check all interconnections of base pairs on their integrity
+		"""
 
 		self.retrieveAllBasePairs()
 		self.retrievePositionalInterconnection()
@@ -3480,6 +3180,9 @@ class Variables:
 			self.checkAccessibilityViolation(conformation_dotplot_2, i, accessibility_request_2)
 	
 	def parseExtendedVariables(self):
+		"""
+			Parse aux variables and load IUPAC 
+		"""
 		if self.seed != "none":
 			random.seed(self.seed)
 
@@ -3537,6 +3240,9 @@ class Variables:
 	
 	
 	def parse_GC_management(self):
+		"""
+			Parse and and transform tGC values
+		"""
 
 		if len(self.tGC) == 1 and type(self.tGC[0]) is float: # CASE Only one tGC value is defined, which needs to account for the whole terrain
 			tgc = self.tGC.pop()
