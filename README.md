@@ -9,7 +9,7 @@ Starting with version 2.0.0 bistable RNA can be modelled. This can either be don
 Please consult repsective release description for more info.
 
 ### VERSION HISTORY
- - v220(with Version Tag):
+ - v200(with Version Tag):
   - Introducing bistable inverse folding based on the partition function and their dotplots. General restructuring of the 	terrain graph due to the new structural obstacles.
   - new updating and bonification
   - new sequence emission routine
@@ -39,13 +39,11 @@ Please consult repsective release description for more info.
  - v109:
   - has now some extended RNAfold functionality (parameterfile selection, Temperature)
 	
-
-
-
 ###### References
 When using antaRNA in your work, please cite antaRNA.
- - R. Kleinkauf, M. Mann and R. Backofen; antaRNA: ant colony-based RNA sequence design,doi:10.1093/bioinformatics/btv319, Bioinformatics, 2015 Oct 1;31(19):3114-21
-  - [antaRNA: ant colony-based RNA sequence
-design](http://bioinformatics.oxfordjournals.org/content/31/19/3114.long).
- - R. Kleinkauf, T. Houwaart, R. Backofen and M. Mann; antaRNA: Multi-Objective Inverse Folding of Pseudoknot RNA using Ant-Colony Optimization;doi:10.1186/s12859-015-0815-6, 16:389, BMC Bioinformatics(2015)
-  - [antaRNA: Multi-Objective Inverse Folding of Pseudoknot RNA using Ant-Colony Optimization](http://www.biomedcentral.com/content/pdf/s12859-015-0815-6.pdf)
+
+ - R. Kleinkauf, M. Mann and R. Backofen; [antaRNA: ant colony-based RNA sequence
+design](http://bioinformatics.oxfordjournals.org/content/31/19/3114.long),doi:10.1093/bioinformatics/btv319, Bioinformatics, 2015 Oct 1;31(19):3114-21
+
+ - R. Kleinkauf, T. Houwaart, R. Backofen and M. Mann; antaRNA: [antaRNA: Multi-Objective Inverse Folding of Pseudoknot RNA using Ant-Colony Optimization](http://www.biomedcentral.com/content/pdf/s12859-015-0815-6.pdf);doi:10.1186/s12859-015-0815-6, 16:389, BMC Bioinformatics(2015)
+
