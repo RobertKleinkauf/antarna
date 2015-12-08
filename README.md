@@ -19,7 +19,9 @@ Please check the respective version tag for more description.
 
 ###### References
 When using antaRNA in your work, please cite antaRNA.
- - R. Kleinkauf, M. Mann and R. Backofen, antaRNA: ant colony-based RNA sequence design,doi:10.1093/bioinformatics/btv319, Bioinformatics, 2015
-  - [antaRNA: ant colony-based RNA sequencedesign](http://bioinformatics.oxfordjournals.org/content/early/2015/06/24/bioinformatics.btv319.full.pdf+html).
- - R. Kleinkauf, T. Houwaart, R. Backofen and M. Mann, antaRNA – Multi-Objective Inverse Folding of Pseudoknot RNA using Ant-Colony Optimization 
-  - Submitted: Jul 2015
+
+ - R. Kleinkauf, M. Mann and R. Backofen; [antaRNA: ant colony-based RNA sequence
+design](http://bioinformatics.oxfordjournals.org/content/31/19/3114.long),doi:10.1093/bioinformatics/btv319, Bioinformatics, 2015 Oct 1;31(19):3114-21
+
+ - R. Kleinkauf, T. Houwaart, R. Backofen and M. Mann; antaRNA: [antaRNA: Multi-Objective Inverse Folding of Pseudoknot RNA using Ant-Colony Optimization](http://www.biomedcentral.com/content/pdf/s12859-015-0815-6.pdf);doi:10.1186/s12859-015-0815-6, 16:389, BMC Bioinformatics(2015)
+
