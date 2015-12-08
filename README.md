@@ -1,4 +1,4 @@
-# antaRNAdp--ant assembled RNA: biistable RNA
+# antaRNAdp - ant assembled RNA: Designing bistable RNA
 
 ## Description
 
@@ -7,13 +7,15 @@ get started with base pair probability matrices in order to calculate and model
 bistable RNA molecules and mimicking ligand interaction by applying 
 constraints to simulate the induced conformation.
 
+## Usage
+
+Please check the respective version tag for more description.
+
 ### VERSION HISTORY OF antaRNAdp
 
-v2.0.0 - prototypic version
-
-### Example Calls
-
-ToDo
+ - v2.0.0 
+  - new Terrain Graph and associated functions
+  - new way of defining structural constraints
 
 ###### References
 When using antaRNA in your work, please cite antaRNA.
