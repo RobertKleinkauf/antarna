@@ -4,13 +4,15 @@ antaRNA solves the RNA inverse folding problem for RNA on the secondary structur
 ant-colony optimization meta-heuristics. The tool mimics the behavior of ants when they were foraging.
 By doing so, a solution sequence is found, which satisfies the user defined constraints.
 
-## Description
+Starting with version 2.0.0 bistable RNA can be modelled. This can either be done within one dotplot for intrinsically oszillating RNA or in two conformations dotplots simulating the binding event of an ligand, which should induce structural rearrangement.
 
-antaRNA comes in a single python file so far.
-A suitabe packaging and maybe as well introduction of class wrappers in sighted.
+Please consult repsective release description for more info.
 
-
-### VERSION HISTORY (before checking)
+### VERSION HISTORY
+ - v220(with Version Tag):
+  - Introducing bistable inverse folding based on the partition function and their dotplots. General restructuring of the 	terrain graph due to the new structural obstacles.
+  - new updating and bonification
+  - new sequence emission routine
  - v118(with Version Tag): 
   - Complete Error Handling via the Variables.error. If there is an error, the program will not do the exit(1),
   but report to that variable. The user has to check manually. In command line mode, this is done automatically.
@@ -39,23 +41,6 @@ A suitabe packaging and maybe as well introduction of class wrappers in sighted.
 	
 
 
-## Constraints
-### Structure Constraint
-Structure constraints are standard input to antaRNA. They should be provided in regular dot-bracket notation.
- - regular
-  - nested structures, e.g. `...(((...)))...`
-  - pseudo-knot structures, e.g. `((((.[[[[...)))).]]]]`
- - *fuzzy*
-  - e.g. `AAAA(((...)))AAAA`, s.t. each base pair within the `A` block is counted legal. At least one base pair has to occure in the solution sequence.
-  - e.g. `aaaa(((...)))aaaa`, s.t. each base pair within the `a` block is counted legal. No base pair has to be there, but of course can occure in the solution.
-
-### Sequence Constraint
-Sequence constraint is hold in IUPAC RNA nucleotide definitions and can be set to 'soft mode', by writing the constraint in lower case
-
-### GC contraint
-GC contraint can be concepted in various ways:
- - singular or multiple target GC definitions wihtin one design for non-overlapping stretches of the sequence.
- - GC sampling, such that either normal or gaussian distributions are populated
 
 ###### References
 When using antaRNA in your work, please cite antaRNA.
