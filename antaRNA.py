@@ -537,16 +537,12 @@ def getConstraint(edge, args):
 		constr1 = val[0] # getting the constraint character of position id1
 		id2 = int(val[1][0]) # getting position id2
 		constr2 = val[1][1] # getting the sequence constraint for position id2
-		
-		
 		lowerCase = constr1.islower()
-		
 		if lowerCase:
 			return 1
 		else:
 			c1 = set(args.IUPAC[constr1.upper()]) # getting all explicit symbols of c1
 			c2 = set(args.IUPAC_reverseComplements[constr2.upper()]) # getting the reverse complement explicit symbols of c2
-			
 			if targetNucleotide in c1:
 				if id1 == id2:
 					return 1
@@ -559,11 +555,14 @@ def getConstraint(edge, args):
 				return 0
 				
 	if args.modus == "DP":
-		x, y = edge
-		id0, targetNucleotide0 = x.split(".")
+
+		x, y = edge # separate the edge into nodes
+		#print edge
+		id0, targetNucleotide0 = x.split(".") # retrieve node info
 		id0 = int(id0)
-		id1, targetNucleotide = y.split(".")
+		id1, targetNucleotide = y.split(".") # retrieve node info
 		id1 = int(id1)
+
 		check_nuc = ""
 		check_id = -1
 
@@ -573,24 +572,22 @@ def getConstraint(edge, args):
 
 
 		if check_nuc == "": # transition is within the graph,indicating a base pair interaction, no consequtive nucleotide...
+			#print id0, targetNucleotide0, id1, targetNucleotide,
 			if isCompatible(targetNucleotide0, targetNucleotide, args.IUPAC_compatibles): # the specific base pair is possible, the edge will be further inspected. for constraints
-
+				#print "is compatible"
 				id1 += 1 # the interconnections are 1 based
 				if id1 in args.interconnections: # nuc at pos id1 has some requested interaction
 					constr1 = args.Cseq[id1-1]
-					if constr1.islower():
+					check = ""
+					c1 = args.interconnections[id1][0]
+					if targetNucleotide in c1:
+						for i in xrange(1,len(args.interconnections[id1])):
+							c2 = "".join(set("".join([args.IUPAC_reverseComplements[i] for i in args.interconnections[id1][i][1]])))
+							if targetNucleotide not in c2:
+								return 0
 						return 1
 					else:
-						check = ""
-						c1 = args.interconnections[id1][0]
-						if targetNucleotide in c1:
-							for i in xrange(1,len(args.interconnections[id1])):
-								c2 = "".join(set("".join([args.IUPAC_reverseComplements[i] for i in args.interconnections[id1][i][1].upper()])))
-								if targetNucleotide not in c2:
-									return 0
-							return 1
-						else:
-							return 0
+						return 0
 				else: # case of no base pair
 					constr1 = args.Cseq[id1-1]
 					if constr1.islower():
@@ -602,10 +599,16 @@ def getConstraint(edge, args):
 						else:
 							return 0
 			else:
+				#print "is not compatible"
 				return 0
+
+
 		else: # emitting graph entry point
-			if check_id + 1 in args.interconnections: # nucleotide is starting point of base pair interaction(s)
+			# print "Emitting", check_id, edge, check_id + 1
+			if check_id + 1 in args.interconnections: # nucleotide is starting point of base pair interaction(s) IC are 1-based
+				#print check_id + 1, args.interconnections[check_id + 1]
 				targetNucleotides = set(args.interconnections[check_id + 1][0])
+
 				if check_nuc in targetNucleotides:
 					return 1
 				else:
@@ -753,6 +756,7 @@ def applyTerrainModification(args):
 		for edge in args.TerrainGraph.edges():
 			if "HIVE" not in edge:
 				x, y = edge
+
 				pheromone = args.TerrainGraph[x][y]["pheromone"]
 				pathlength = args.TerrainGraph[x][y]["length"]
 				
@@ -768,6 +772,12 @@ def applyTerrainModification(args):
 			x, y = edge
 			args.TerrainGraph.remove_edge(x, y)
 	
+		# for node in args.TerrainGraph.nodes():
+		# 	if len(args.TerrainGraph.neighbors(node)) == 0:
+		# 		args.TerrainGraph.remove_node(node)
+		
+
+
 def applyGCcontributionPathAdjustment(pathlength, actGC, edge):
 	"""
 		GC path length contribution calculation.
@@ -1422,6 +1432,7 @@ def evaporate(args):
 			x, y = edge
 			args.TerrainGraph[x][y]["pheromone"] *= (1 - args.ER)
 		
+
 def trailBlaze(sequence, path, current_structure, ds, dgc, dseq, args):
 	"""
 		Pheromone Update function accorinding to the quality of the solution
@@ -1453,75 +1464,6 @@ def trailBlaze(sequence, path, current_structure, ds, dgc, dseq, args):
 			args.terrain[transitions[trans]] = (p, l, c) # updating the values wihtin the terrain's
 			
 	elif args.modus == "DP":
-		# IDEA: For each base (resp. its position) in the sequence, it needs 
-		# to be checked, if this certain position has been part of active 
-		# constraint. If so, bonify this segment of path but only if it has 
-		# performed well among all constraints posed to that position.
-		
-		# In addition, one could check, if the base is involved in a larger 
-		# interconnection complex. and bonify it only, if the whole complex is 
-		# satisfying within the dotplots.
-
-		#T = transformTransitions(transitions)
-
-		#print args.PosFeatures
-		#exit(1)
-		# """
-		# 	In this version, each position is dealt individually and to all its features listed from the input.
-		# """
-		# for trans in transitions:
-		# 	from_nt, to_nt = trans
-
-		# 	t_i = int(to_nt.split(".")[0])
-		# 	i = t_i + 1
-
-		# 	deviations = []
-		# 	for DP in args.PosFeatures[i]: # for each present dotplot
-		# 		#print DP
-		# 		if len(args.PosFeatures[i][DP]) > 0:
-					
-		# 			for k, feature in enumerate(args.PosFeatures[i][DP]): # for all listed features on current position
-
-		# 				feature_type, j, value = feature						
-		# 				if feature_type == "Accu":
-		# 					tmp_stack = {i:j}
-		# 					val = getAccuracy(tmp_stack, current_structure[DP])
-		# 				elif feature_type == "Accs":
-		# 					tmp_stack = {i:j}
-		# 					val = getAccessibility(tmp_stack, len(args.Cseq), current_structure[DP])
-		# 				deviations.append(abs(val - value)) # report and add up deviations
-
-		# 	if len(deviations) > 0: # investigate positions bonification
-		# 		if numpy.sum(deviations) <= 0.05: # if general deviation on this position is below value
-		# 			"""
-		# 				ALL EDGES (x.A, y.B) GET PROMOTED DUE TO NUCLEOTIDE B in y.B BEING PART OF the solution structure 
-		# 			"""
-		# 			#print trans
-		# 			#print t_i
-		# 			edges = [e for e in args.TerrainGraph.edges() if str(t_i) in e[1] and "XY" not in e[1]]
-		# 			# no, trail = transitions[t_i].split(".")
-		# 			# nt = ["A", "C", "G", "U"]
-		# 			# if len(trail) > 1:
-		# 			# 	to_nt = trail[-1:]
-		# 			# 	edges = set([ no + "." + n + to_nt for n in nt])
-		# 			# else:
-		# 			# 	edges = set(transitions[t_i])
-		# 			for edge in edges:
-		# 				try:
-		# 					x, y = edge
-		# 					#print x, y
-		# 					args.TerrainGraph[x][y]["pheromone"] += d * (1-abs(val - value)) * 100
-		# 					# p, l, c = args.terrain[edge] # getting the pheromone and the length value of the single path transition
-		# 					# p +=  d * (1-abs(val - value)) * 100000
-		# 					#args.terrain[transitions[t_i]] = (p, l, c)
-		# 				except:
-		# 					pass
-		"""
-			JUST THE SPECIFIC EDGE y.AB IS ACTUALLY PROMOTED, where B was the important nucleotide present in y A in y-1
-		"""
-		#p, l, c = args.Terrain[transitions[t_i]] # getting the pheromone and the length value of the single path transition
-		#p +=  d * (1-abs(val - value))* 100
-		#args.Terrain[transitions[t_i]] = (p, l, c)
 
 
 		"""
@@ -1558,8 +1500,11 @@ def trailBlaze(sequence, path, current_structure, ds, dgc, dseq, args):
 			# check for each individual of the batch, how it performs in the dotplots and retreive
 			# the corresponding deviation from the target value
 			values = []
+			individual_values = {}
 			for h in batch_individuals:
-				i = int(h) + 1
+				h = int(h)
+				i = h + 1
+
 				for DP in args.PosFeatures[i]:
 					if len(args.PosFeatures[i][DP]) > 0:
 						for k, feature in enumerate(args.PosFeatures[i][DP]):
@@ -1567,25 +1512,30 @@ def trailBlaze(sequence, path, current_structure, ds, dgc, dseq, args):
 							if feature_type == "Accu":
 								tmp_stack = {i:j}
 								val = getAccuracy(tmp_stack, current_structure[DP])
-								values.append(abs(val - value))
+								result_value = abs(val - value)
+								values.append(result_value)
+
+
 							elif feature_type == "Accs":
 								tmp_stack = {i:j}
 								val = getAccessibility(tmp_stack, len(args.Cseq), current_structure[DP])
-								values.append(abs(val - value))
+								result_value = abs(val - value)
+								values.append(result_value)
 
-			# check wheather some values could be retrieved, then 
 			if len(values) > 0: # calculate an average value of the just vitnessed results
 				avrg_val = sum(values)/float(len(values))
 			else: # or assume the worst case, maximal deviation
 				avrg_val = 1
 
 			# bonify the members of the batch if the average is below a certain threshold
-			if  avrg_val <= 0.2: 
+			if  avrg_val <= args.trailblazer: 
 				for element in batch_individuals:  # retreive corresponding edge, which led to the respective nucleotide
+					
 				 	sequence_position = int(element)
 				 	from_nt, to_nt = path[sequence_position]
+				 	# average quality threshold to trigger bonification with average value
 					args.TerrainGraph[from_nt][to_nt]["pheromone"] +=  d * (1-avrg_val) # bonify with average batch value
-
+					
 
 def getTransitions(p):
 	"""
@@ -1793,7 +1743,11 @@ def exe():
 								default=None,
 								action='append'
 								)
-
+	DP_parser.add_argument("--trailblaze_threshold",
+								help="Define the threshold whic need to be passed in order to bonify certain elements in the terrain graph.\n\n",
+								type=float,
+								default=0.2
+								)
 	### General Variables available in both modes
 	constraints = argument_parser.add_argument_group('Constraint Variables', 'Use to define an RNA constraint system.')
 
@@ -1954,6 +1908,11 @@ def exe():
 	hill.params.readArgParseArguments(argparse_arguments)
 	hill.params.py = False
 	hill.params.check()
+
+
+
+
+
 	if hill.params.error == "0":
 		hill.swarm()
 	else:
@@ -2002,8 +1961,6 @@ class AntHill:
 		"""
 			Execution function of a single ant colony finding one solution sequence
 		"""
-		
-		
 		RNAfold = init_RNAfold(213, self.params.temperature, self.params.paramFile)
 		RNAfold_pattern = re.compile('.+\n([.()]+)\s.+')
 			
@@ -2012,9 +1969,9 @@ class AntHill:
 			start_time = time.time()
 
 			setGC(self.params)
-
 			initTerrain(self.params) 
 			applyTerrainModification(self.params)
+
 
 			global_ant_count = 0
 			global_best_ants = 0
@@ -2025,6 +1982,7 @@ class AntHill:
 
 			counter = 0
 			
+
 			dstruct_log = []
 			dGC_log = []
 				
@@ -2109,7 +2067,7 @@ class AntHill:
 						print current_structure, " <- CS"
 					print sequence,
 					print " <- CS", "Dscore", str(Dscore), "ds", ds, "dGC", dGC, "GC", getGC(sequence)*100, "Dseq", dseq
-
+					dstruct_log.append((global_ant_count, Dscore, best_solution[2]))
 				#### UPDATING THE TERRAIN ACCORDING TO THE QUALITY OF THE CURRENT BESTO-OUT-OF-k SOLUTION
 				#print [self.params.TerrainGraph[e[0]][e[1]]["pheromone"]for e in self.params.TerrainGraph.edges() if "HIVE" not in e[0]]
 				updateTerrain(sequence, path, current_structure, ds, dGC, dseq, self.params) 
@@ -2174,7 +2132,7 @@ class AntHill:
 					resets += 1
 				
 				used_time = getUsedTime(start_time)
-				
+
 			duration  = used_time
 			self.tmp_sequence = best_solution[0]
 			self.tmp_path = best_solution[6]
@@ -2394,7 +2352,7 @@ class Variables:
 		self.time = 600
 		self.plot = False
 		self.error = "0"
-
+		self.trailblazer = 0.2
 		
 
 	def readArgParseArguments(self, args):
@@ -2419,6 +2377,8 @@ class Variables:
 			self.accessibility = args.accessibility
 			self.diff_accuracy = args.diff_accuracy
 			self.diff_accessibility = args.diff_accessibility
+			self.trailblazer = args.trailblaze_threshold
+
 		self.Cseq = args.Cseq
 		self.tGC = args.tGC
 		
@@ -2905,10 +2865,6 @@ class Variables:
 						
 			to_be_visited.pop(to_be_visited.index(index))
 
-
-		
-
-
 		self.Interconnection_sets = []
 		for i in self.interconnections:
 			indices_pre = []
@@ -2931,10 +2887,28 @@ class Variables:
 			if s not in self.Interconnection_sets:
 				self.Interconnection_sets.append(s)
 
+	def detectSequenceConstraintViolation(self):
+		
+		for ig in self.interconnections:
+			nucs = self.interconnections[ig][0]
+			for i in xrange(1,len(self.interconnections[ig])):
 
-		# single_stranded_set = set([i for i in xrange(self.length)]) - set([i-1 for i in self.interconnections])
-		# for s in single_stranded_set:
-		# 	self.interconnections[s] = [self.IUPAC[self.Cseq[s]], s]
+				nucs = set(nucs)
+				other_nucs = set(self.interconnections[ig][i][1])
+
+
+				for n in nucs:
+					iscompatible = False
+					for nn in other_nucs:
+						if isCompatible(n, nn, self.IUPAC_compatibles):
+							iscompatible = True
+					if iscompatible == False:
+						self.error = "Found some nucleotide constraint which is opposing each other in Interconnection.%s %s" % (nucs, other_nucs)
+
+
+
+
+
 
 	def detect_circles(self):
 		"""
@@ -2991,7 +2965,7 @@ class Variables:
 		self.retrieveAllBasePairs()
 		self.retrievePositionalInterconnection()
 		self.detect_circles()
-
+		self.detectSequenceConstraintViolation()
 
 	def getPositionFeatures(self):
 		"""
@@ -3006,56 +2980,31 @@ class Variables:
 		for i in xrange(1,self.length+1):	
 			self.PosFeatures[i] = {"UB":[], "B":[]}
 			
-		#for i in args.PosFeatures.keys():
-			#print i, args.PosFeatures[i]
+
 		if self.accur:	
 			for elements in self.accur:
-				#print elements
 				for entry_key in elements[0].keys():
-					#print entry_key,
 					entry_val = elements[0][entry_key]
-					#print entry_val
-					#if elements[1] in args.PosFeatures[entry_key]:
 					self.PosFeatures[entry_key][elements[1]].append(("Accu", entry_val,  elements[2]))
-					#else:	
-						#args.PosFeatures[entry_key][elements[1]] = [("Accu", entry_val,  elements[2])]
-		
+
 		if self.access:
 			for elements in self.access:
 				for entry_key in elements[0].keys():
-					#if elements[1] in args.PosFeatures[entry_key]:
 					self.PosFeatures[entry_key][elements[1]].append(("Accs", entry_key, elements[2]))
-					#else:
-						#args.PosFeatures[entry_key][elements[1]] = [("Accs", entry_key, elements[2])]
-		
+
 		if self.diffaccur:
 			for elements in self.diffaccur:
 				for entry_key in elements[0].keys():
 					entry_val = elements[0][entry_key]
-					#if elements[1] in args.PosFeatures[entry_key]:
 					self.PosFeatures[entry_key][elements[1]].append(("Accu", entry_val, elements[2]))
-					#else:
-						#args.PosFeatures[entry_key][elements[1]] = [("Accu", entry_val, elements[2])]
-						
-					#if elements[3] in args.PosFeatures[entry_key]:
 					self.PosFeatures[entry_key][elements[3]].append(("Accu", entry_val, elements[4]))
-					#else:
-						#args.PosFeatures[entry_key][elements[3]] = [("Accu", entry_val, elements[4])]
-										
-				
+			
 		if self.diffaccess:
 			for elements in self.diffaccess:
 				for entry_key in elements[0].keys():
-					#if elements[1] in args.PosFeatures[entry_key]:
 					self.PosFeatures[entry_key][elements[1]].append(("Accs", entry_key, elements[2]))
-					#else:
-						#args.PosFeatures[entry_key][elements[1]] = [("Accs", entry_key, elements[2])]
-						
-					#if elements[3] in args.PosFeatures[entry_key]:
 					self.PosFeatures[entry_key][elements[3]].append(("Accs", entry_key, elements[4]))
-					#else:
-						#args.PosFeatures[entry_key][elements[3]] = [("Accs", entry_key, elements[4])]
-				
+
 
 	def parse_StructureFeatures(self):
 		"""
@@ -3075,7 +3024,6 @@ class Variables:
 		# requested feature is compatible with the already inputed ones.
 		# Initially all positions are accessible. A structure requests lowers the resp. accessibility.
 		
-
 		# ACCESSIBILITY
 		self.access = []
 		if self.accessibility:
@@ -3085,10 +3033,7 @@ class Variables:
 				value = request[2]
 				self.addAccessibilityRequest(struct_info, constraint_system, value)
 				self.access.append((struct_info, constraint_system, value))
-		#del self.accessibility
-		if self.access:
-			print "self.access", self.access
-			
+
 		# DIFF_ACCESSIBILITY
 		self.diffaccess = []
 		if self.diff_accessibility:
@@ -3100,18 +3045,16 @@ class Variables:
 				value_2 = request[4]
 				self. addDiffAccessibilityRequest(struct_info , constraint_system_1, value_1, constraint_system_2, value_2)
 				self.diffaccess.append((struct_info , constraint_system_1, value_1, constraint_system_2, value_2))
-		#del self.diff_accessibility
-		if self.diffaccess:
-			print "self.diffaccess", self.diffaccess
-			
-			
+
+
 		self.accur = []
 		# CONSTRAINT STRUCTURE
 		if self.Cstr != None:
 			self.addAccuracyRequest(removeUnpairedFrom_bpstack(getbpStack(self.Cstr)[0]), "B", 1)
 			self.accur.append((removeUnpairedFrom_bpstack(getbpStack(self.Cstr)[0]), "B", 1))
-		# ACCURACY
 
+		# ACCURACY
+		
 		if self.accuracy:
 			for request in self.accuracy:
 				struct_info = removeUnpairedFrom_bpstack(getbpStack(request[0])[0])
@@ -3120,10 +3063,6 @@ class Variables:
 				self.addAccuracyRequest(struct_info, constraint_system_1, value_1)
 				self.accur.append((struct_info, constraint_system_1, value_1))
 
-		#del self.accuracy
-		# if self.accur:
-		# 	print "self.accur", self.accur
-		
 		# DIFF_ACCURACY
 		self.diffaccur = []
 		if self.diff_accuracy:
@@ -3135,15 +3074,7 @@ class Variables:
 				value_2 = request[4]
 				self.addDiffAccuracyRequest(struct_info, constraint_system_1, value_1, constraint_system_2, value_2)
 				self.diffaccur.append((struct_info, constraint_system_1, value_1, constraint_system_2, value_2))
-		#del self.diff_accuracy
-		if self.diffaccur:
-			print "self.diffaccur", self.diffaccur
 		
-		#print "\n\n"
-		#for i in args.SC:
-			#print i, args.SC[i]
-		
-		#exit(1)
 
 	def addAccuracyRequest(self, struct_info, constraint_system_1, value_1):
 		"""
@@ -3208,7 +3139,10 @@ class Variables:
 			self.IUPAC_reverseComplements = {"A":"U", "C":"G", "G":"C", "U":"A", "R":"UC", "Y":"AG", "S":"GC", "W":"UA","K":"CA", "M":"UG", "B":"AGC", "D":"ACU", "H":"UGA", "V":"UGC", "N":"ACGU"}         
 		else: ## allowing the GU basepair
 			self.IUPAC_reverseComplements = {"A":"U", "C":"G", "G":"UC", "U":"AG", "R":"UC", "Y":"AG", "S":"UGC", "W":"UAG","K":"UCAG", "M":"UG", "B":"AGCU", "D":"AGCU", "H":"UGA", "V":"UGC", "N":"ACGU"}         
-		
+
+		if self.modus == "DP":
+			if self.trailblazer > 1.0 and self.trailblazer < 0:
+				self.error = "The trail blaze threshold should be within [0,1]."
 
 	def reachableGC(self):
 		"""
