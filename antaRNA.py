@@ -575,12 +575,17 @@ def getConstraint(edge, args):
 			#print id0, targetNucleotide0, id1, targetNucleotide,
 			if isCompatible(targetNucleotide0, targetNucleotide, args.IUPAC_compatibles): # the specific base pair is possible, the edge will be further inspected. for constraints
 				#print "is compatible"
+				id0 += 1
 				id1 += 1 # the interconnections are 1 based
 				if id1 in args.interconnections: # nuc at pos id1 has some requested interaction
-					constr1 = args.Cseq[id1-1]
-					check = ""
+
+					constr0 = args.Cseq[id0 - 1]
+					c0 = args.interconnections[id0][0]
+
+					constr1 = args.Cseq[id1 - 1]
 					c1 = args.interconnections[id1][0]
-					if targetNucleotide in c1:
+
+					if targetNucleotide0 in c0 and targetNucleotide in c1:
 						for i in xrange(1,len(args.interconnections[id1])):
 							c2 = "".join(set("".join([args.IUPAC_reverseComplements[i] for i in args.interconnections[id1][i][1]])))
 							if targetNucleotide not in c2:
@@ -588,16 +593,15 @@ def getConstraint(edge, args):
 						return 1
 					else:
 						return 0
+
+
 				else: # case of no base pair
 					constr1 = args.Cseq[id1-1]
-					if constr1.islower():
+					c1 = args.IUPAC[constr1.upper()]
+					if targetNucleotide in c1:
 						return 1
 					else:
-						c1 = args.IUPAC[constr1.upper()]
-						if targetNucleotide in c1:
-							return 1
-						else:
-							return 0
+						return 0
 			else:
 				#print "is not compatible"
 				return 0
@@ -755,14 +759,15 @@ def applyTerrainModification(args):
 
 		for edge in args.TerrainGraph.edges():
 			if "HIVE" not in edge:
-				x, y = edge
+				x, y = edge # split up of edge info into nodes
 
-				pheromone = args.TerrainGraph[x][y]["pheromone"]
-				pathlength = args.TerrainGraph[x][y]["length"]
+				pheromone = args.TerrainGraph[x][y]["pheromone"] # retrieve current pheromone value
+				pathlength = args.TerrainGraph[x][y]["length"] # retrieve current pathlength value
 				
-				pheromone = getConstraint(edge,args)
-				pathlength = applyGCcontributionPathAdjustment(pathlength, actGC, edge)
-				if pheromone * pathlength == 0: 
+				pheromone = getConstraint(edge,args) # get situation dependent pheromone value
+				pathlength = applyGCcontributionPathAdjustment(pathlength, actGC, edge) # get situation dependent path length value
+
+				if pheromone * pathlength == 0: # check if a factor is 0, therefore decide the edge to be not keepable for calculation
 					dels.append(edge)
 				else:
 					args.TerrainGraph[x][y]["pheromone"] = pheromone
@@ -770,12 +775,12 @@ def applyTerrainModification(args):
 			
 		for edge in dels:
 			x, y = edge
-			args.TerrainGraph.remove_edge(x, y)
-	
-		# for node in args.TerrainGraph.nodes():
-		# 	if len(args.TerrainGraph.neighbors(node)) == 0:
-		# 		args.TerrainGraph.remove_node(node)
-		
+			args.TerrainGraph.remove_edge(x, y) # remove the unsuited edges from the Graph
+			if len(args.TerrainGraph.neighbors(x)) + len(args.TerrainGraph.predecessors(x)) == 0:
+				args.TerrainGraph.remove_node(x) # remove node x, if it has no in- and outgoing edges
+			if len(args.TerrainGraph.neighbors(y)) + len(args.TerrainGraph.predecessors(y)) == 0:
+				args.TerrainGraph.remove_node(y) # remove node y, if it has no in- and outgoing edges
+
 
 
 def applyGCcontributionPathAdjustment(pathlength, actGC, edge):
@@ -1356,7 +1361,7 @@ def getStructuralDistance(args, sequence, RNAfold, RNAfold_pattern):
 		ddsf = ddsf_diff_accur + ddsf_access
 		dsf = dsf_accur + dsf_access
 
-		d = (ddsf + dsf) / max_struct_deviation * 100
+		d = ((ddsf + dsf) / max_struct_deviation) * 100
 
 		return d , DP
 		
@@ -1971,8 +1976,21 @@ class AntHill:
 			setGC(self.params)
 			initTerrain(self.params) 
 			applyTerrainModification(self.params)
-
-
+			# with open(os.getcwd() + "/antaRNA_edges", 'w') as TARGET:
+			# 	TARGET.write("Source;Target;Weight\n")
+			# 	for edges in self.params.TerrainGraph.edges():
+			# 		n1, n2 = edges
+			# 		pheromone = 1
+			# 		try:
+			# 			pheromone = self.params.TerrainGraph[n1][n2]["pheromone"]
+			# 		except:
+			# 			pass
+			# 		TARGET.write(n1 + ";" + n2 + ";" + str(pheromone)+"\n")
+			# with open(os.getcwd() + "/antaRNA_nodes", 'w') as TARGET:
+			# 	TARGET.write("Nodes;Id;Label\n")
+			# 	for node in self.params.TerrainGraph.nodes():
+			# 		TARGET.write("\""+node + "\";\"" + node + "\";\"" + node + "\"\n")
+			# exit(1)
 			global_ant_count = 0
 			global_best_ants = 0
 			criterion = False
