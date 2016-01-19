@@ -2921,7 +2921,7 @@ class Variables:
 						if isCompatible(n, nn, self.IUPAC_compatibles):
 							iscompatible = True
 					if iscompatible == False:
-						self.error = "Found some nucleotide constraint which is opposing each other in Interconnection.%s %s" % (nucs, other_nucs)
+						self.error = "Found some nucleotide constraint which is opposing each other in Interconnection.%s %s" % (ig, self.interconnections[ig])
 
 
 
