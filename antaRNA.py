@@ -43,6 +43,38 @@ def GC(string):
 		#print "tGC", tGC
 		return (tGC)
 	
+
+
+def FuzzyConstraintFeature(string):
+	"""
+		argparse type definition of a fuzzy structure constraint feature
+	"""
+	m = re.match('^\s*([.a-zA-Z]*)\s*(\w+)\s*(\d+\.?\d+)\s*$', string)
+	if m is None:
+		print "'" + string + "' is not a valid FuzzyConstraintFeature input of type STRUCTUREBLOCK STRING FLOAT"
+		exit(1)
+	s1 = m.group(1)
+	s2 = m.group(2)
+	s3 = float(m.group(3))
+	return ( (s1, s2, s3) )
+
+
+
+def DiffFuzzyConstraintFeature(string):
+	"""
+		argparse type definition of a differential fuzzy structure constraint feature
+	"""
+	m = re.match('^\s*([.a-zA-Z]*)\s*(\w+)\s*(\d+\.?\d+)\s*(\w+)\s*(\d+\.?\d+)\s*$', string)
+	if m is None:
+		print "'" + string + "' is not a valid DiffFuzzyConstraintFeature input of type STRUCTUREBLOCK STRING FLOAT STRING FLOAT"
+		exit(1)
+	s1 = m.group(1)
+	s2 = m.group(2)
+	s3 = float(m.group(3))
+	s4 = m.group(4)
+	s5 = float(m.group(5))
+	return ( (s1, s2, s3, s4, s5) )
+	
 def AccuracyFeature(string):
 	"""
 		argparse type definition of accuracy feature
@@ -281,6 +313,8 @@ def getAccessibility(positions, l, bppm):
     return 1 -(acc/len(positions))
 
 
+
+
 def removePairedAndUndefined_From_bpstack(P, struct_stack):
 	"""
 		Produce stack for the calculation of accessibility
@@ -301,6 +335,90 @@ def removeUnpairedFrom_bpstack(struct_stack):
 			tmp_struct_stack[i + 1] = struct_stack[i] + 1
 	return tmp_struct_stack
     
+def all_indices(value, qlist):
+    indices = []
+    idx = -1
+    while True:
+        try:
+            idx = qlist.index(value, idx+1)
+            indices.append(idx)
+        except ValueError:
+            break
+    return indices
+
+
+def retrieveFuzzyStack(P):
+	# print P
+
+	# Find out interaction type
+	interaction_type = ""
+	p = P.replace(".", "")
+	#print p, p[0]
+	if p[0].isupper():
+		interaction_type = "self"
+		P = "".join(([l.upper() for l in list(P)]))
+	else:
+		interaction_type = "non-self"
+		P = "".join(([l.lower() for l in list(P)]))
+
+	# Find out block types
+	p = P.strip(".")
+	block_type = ""
+	if len(P.replace(".", "")) == len(p):
+		block_type = "consecutive"
+
+	else:
+		block_type = "split"
+	#print block_type, interaction_type
+	# Check for a single block which just should be non self interacting
+	if interaction_type == "non-self" and block_type == "consecutive":
+		P = str([l.upper() for l in list(P)])
+		interaction_type = "self"
+
+
+	# retrieving the indices
+	indices = all_indices(p[0], list(P))
+	all_pairs_involved = []
+	for i in indices:
+		for j in indices:
+			if abs(i-j) > 3 and i < j:
+				all_pairs_involved.append((i,j))
+
+
+	i = indices[0]
+	j = ""
+	jpk = ""
+	l = ""
+	prev = i
+	for ri in xrange(1, len(indices)):
+		if indices[ri] == prev + 1:
+			prev = indices[ri]
+		else:
+			j = prev
+			jpk = indices[ri]
+			l = indices[-1]
+			break
+	#print i, j, jpk, l
+	
+	#print block_type, interaction_type
+	if block_type == "split" and interaction_type == "non-self":
+		dels = []
+		for bp in all_pairs_involved:
+			a, b = bp
+			if ((i <= a and a <= j) and (i <= b and b <= j)) or ((jpk <= a and a <= l) and (jpk <= b and b <= l)) :# both indices are wihtin first block
+				dels.append(bp)
+		for d in dels:
+			del all_pairs_involved[all_pairs_involved.index(d)]
+
+	#print P
+	#print indices
+	#print all_pairs_involved
+	#exit(1)
+	return all_pairs_involved
+
+
+
+
 def getStructStacks(structure_queries):
 	"""
 		for each structure query, produce appropriate stack
@@ -688,6 +806,8 @@ def initTerrain(args):
 						go_back = walk_order.pop()
 						visit = [go_back]
 
+	#print args.GenerateSequence
+
 def applyTerrainModification(args):
 	"""
 		Dependent on the input, this function modifies the terrain accordingly. 
@@ -787,6 +907,10 @@ def applyGCcontributionPathAdjustment(pathlength, actGC, edge):
 	"""
 		GC path length contribution calculation.
 	"""	
+	# print pathlength
+	# print actGC
+	# print edge
+	# #exit(1)
 	GCadjustment = 1.5
 	minimum = 0.5
 	upper = GCadjustment
@@ -1297,36 +1421,44 @@ def getStructuralDistance(args, sequence, RNAfold, RNAfold_pattern):
 		if args.diffaccess:
 			for i in args.diffaccess:
 				#print i
+				diff1 = 0
+				diff2 = 0
 				for c in i[0]:
 					tmp_c = {c:c}
 					# calculating the first deviation
 					access_1 = getAccessibility(tmp_c, L, DP[i[3]])
-					max_struct_deviation += getMaxTargetDeviation(i[4])
-					diff_1 = abs(access_1 - i[4])
+					diff1 += abs(access_1 - i[4])
 					# calculating the second deviation
 					access_2 = getAccessibility(tmp_c, L, DP[i[1]])
-					max_struct_deviation += getMaxTargetDeviation(i[2])
-					diff_2 = abs(access_2 - i[2])
-
-					ddsf_access += diff_1 + diff_2
+					diff2 += abs(access_2 - i[2])
+					
+				max_struct_deviation += getMaxTargetDeviation(i[2])	
+				max_struct_deviation += getMaxTargetDeviation(i[4])
+				diff1 /= float(len(i[0]))
+				diff2 /= float(len(i[0]))
+				ddsf_access += diff1 + diff2
 
 		
 		# Differential Accuracy Structural Feature
 		ddsf_diff_accur = 0
 		if args.diffaccur:
 			for i in args.diffaccur:
+				diff1 = 0
+				diff2 = 0
 				for c in i[0]:
 					tmp_c = {c:i[0][c]}
 					# calculating the first deviation
 					accur_1 = getAccuracy(tmp_c, DP[i[3]])
-					max_struct_deviation += getMaxTargetDeviation(i[4])
-					diff_1 = abs(accur_1 - i[4])
+					diff1 += abs(accur_1 - i[4])
 					# calculating the second deviation
 					accur_2 = getAccuracy(tmp_c, DP[i[1]])
-					max_struct_deviation += getMaxTargetDeviation(i[2])
-					diff_2 = abs(accur_2 - i[2])
-					
-					ddsf_diff_accur += diff_1 + diff_2
+					diff2 += abs(accur_2 - i[2])
+
+				max_struct_deviation += getMaxTargetDeviation(i[4])
+				max_struct_deviation += getMaxTargetDeviation(i[2])
+				diff1 /= float(len(i[0]))
+				diff2 /= float(len(i[0]))
+				ddsf_diff_accur += diff1 + diff2
 
 		
 		
@@ -1334,35 +1466,99 @@ def getStructuralDistance(args, sequence, RNAfold, RNAfold_pattern):
 		dsf_access = 0
 		if args.access:
 			for i in args.access:
+				diff1 = 0
 				for c in i[0]:
 					tmp_c = {c:c}
 					# calculating the deviation
 					access_1 = abs(getAccessibility(tmp_c, L, DP[i[1]]))
-					max_struct_deviation += getMaxTargetDeviation(i[2])
-					diff_1 = abs(access_1 - i[2])
-					
-					dsf_access += diff_1
+					diff1 += abs(access_1 - i[2])
+
+				max_struct_deviation += getMaxTargetDeviation(i[2])
+				diff1 /= float(len(i[0]))
+				dsf_access += diff1
 		
 		# Accuracy structural feature
 		dsf_accur = 0
 		if args.accur:
 			for i in args.accur:
+				diff1 = 0
 				for c in i[0]:
 					tmp_c = {c:i[0][c]}
 					# calculating the deviation
 					accu_1 = getAccuracy(tmp_c, DP[i[1]])
-					max_struct_deviation += getMaxTargetDeviation(i[2])
-					diff_1 = abs(accu_1 - i[2])
+					diff1 += abs(accu_1 - i[2])
 
-					dsf_accur += diff_1
+				max_struct_deviation += getMaxTargetDeviation(i[2])
+				diff1 /= float(len(i[0]))
+				dsf_accur += diff1
 
-				
-				
-		ddsf = ddsf_diff_accur + ddsf_access
-		dsf = dsf_accur + dsf_access
+		# Fuzzy Constraint Distance
+		# print "DistancE"
+
+		dsf_fuzzy = 0
+		# print dsf_fuzzy
+		if args.fuzzy:
+			for i in args.fuzzy:
+				# print i
+				diff1 = 0
+				for c in i[0]:
+					a,b = c
+					tmp_c = {a:b}
+					
+					fuzzy_1 = getAccuracy(tmp_c, DP[i[1]])
+					# fuzzy_1 /= len(i[0])**2
+					diff1 += abs(fuzzy_1 - i[2])
+				#print diff1
+				diff1 /= float(len(i[0]))
+				max_struct_deviation += getMaxTargetDeviation(i[2])
+				dsf_fuzzy += diff1
+
+
+		ddsf_fuzzy = 0
+		if args.difffuzzy:
+			for i in args.difffuzzy:
+				#print i
+				diff1 = 0
+				diff2 = 0
+				# fuzzy_1 = 0
+				# fuzzy_2 = 0
+				for c in i[0]:
+					a,b = c
+					tmp_c = {a:b}
+
+					fuzzy_1 = getAccuracy(tmp_c, DP[i[1]])
+					fuzzy_2 = getAccuracy(tmp_c, DP[i[3]])
+
+				# fuzzy_1 /= len(i[0])**2
+				# fuzzy_2 /= len(i[0])**2
+					diff1 += abs(fuzzy_1 - i[2])
+					diff2 += abs(fuzzy_2 - i[4])
+				#print diff_1
+				diff1 /= float(len(i[0]))
+				diff2 /= float(len(i[0]))
+				max_struct_deviation += getMaxTargetDeviation(i[2])
+				max_struct_deviation += getMaxTargetDeviation(i[4])
+				ddsf_fuzzy += diff1 + diff2
+
+
+
+
+
+
+		ddsf = ddsf_diff_accur + ddsf_access + ddsf_fuzzy
+		dsf = dsf_accur + dsf_access + dsf_fuzzy
 
 		d = ((ddsf + dsf) / max_struct_deviation) * 100
 
+
+		# print "dfaccur", ddsf_diff_accur
+		# print "dfaccuess", ddsf_access
+		# print "dffuzzy", ddsf_fuzzy
+		# print "accur", dsf_accur
+		# print "access", dsf_access
+		# print "fuzzy", dsf_fuzzy
+		# print "dev", max_struct_deviation
+		# print "d", d
 		return d , DP
 		
 		
@@ -1469,14 +1665,93 @@ def trailBlaze(sequence, path, current_structure, ds, dgc, dseq, args):
 			args.terrain[transitions[trans]] = (p, l, c) # updating the values wihtin the terrain's
 			
 	elif args.modus == "DP":
+		"""
+			If a Fuzzy structure constraint is present, bonify the according currently participating edges accordingly
+		"""
 
+		if args.fuzzy:
+			for elements in args.fuzzy:
+				base_pairs = elements[0]
+				indices = set([])
+				for bp in base_pairs:
+					a,b = bp
+					indices = indices | set([a])
+					indices = indices | set([b])
+				
+				system = elements[1]
+				value = elements[2]
+
+				d = 0
+				for bp in base_pairs:
+					a, b = bp
+					tmp_stack = {a:b} 
+					d += getAccuracy(tmp_stack, current_structure[system])
+				d /= float(len(base_pairs))
+				difference = abs(d - value)
+
+				if difference <= args.trailblazer:
+					edges_to_bonify = []
+					for edge_step in args.GenerateSequence: 
+						
+						a,b = edge_step
+
+						if int(b) in indices:
+							indx = args.GenerateSequence.index(edge_step)
+							#print  edge_step , indx
+							edge_instance = path[int(b)]
+							aa, bb = edge_instance
+							args.TerrainGraph[aa][bb]["pheromone"] +=  d * (1-difference)
+		if args.difffuzzy:
+			for elements in args.difffuzzy:
+				base_pairs = elements[0]
+				indices = set([])
+				for bp in base_pairs:
+					a,b = bp
+					indices = indices | set([a])
+					indices = indices | set([b])
+				
+				system1 = elements[1]
+				value1 = elements[2]
+				system2 = elements[3]
+				value2 = elements[4]
+
+				d1 = 0
+				d2 = 0
+				for bp in base_pairs:
+					a, b = bp
+					tmp_stack = {a:b} 
+					d1 += getAccuracy(tmp_stack, current_structure[system1])
+					d2 += getAccuracy(tmp_stack, current_structure[system2])
+				d1 /= float(len(base_pairs))
+				d2 /= float(len(base_pairs))
+				difference1 = abs(d1 - value)
+				difference2 = abs(d2 - value)
+				difference = (difference1 + difference2) / float(2)
+
+				if difference <= args.trailblazer:
+					edges_to_bonify = []
+					for edge_step in args.GenerateSequence: 
+						
+						a,b = edge_step
+
+						if int(b) in indices:
+							indx = args.GenerateSequence.index(edge_step)
+							#print  edge_step , indx
+							edge_instance = path[int(b)]
+							aa, bb = edge_instance
+							args.TerrainGraph[aa][bb]["pheromone"] +=  d * (1-difference)
 
 		"""
 			If a complete interaction collection is performing well, the whole interconnection is bonified by average quality of the group
 		"""
+		#print "GS", args.GenerateSequence
+
 
 		for i, edge in enumerate(args.GenerateSequence):
+			#print "\n"
+			#print "walked", i, edge
 			# extract info about subgraph to investigate
+			#print "HellO"
 			batch = []
 			if "XY" in edge[0]: # starting point to investigate a subgraph and create a corresponding batch
 				batch.append(edge)
@@ -1484,17 +1759,18 @@ def trailBlaze(sequence, path, current_structure, ds, dgc, dseq, args):
 				if j + 1 < len(args.GenerateSequence)-1: # increment for following edges
 						j += 1
 				else:
-					break
+					pass
 				# add edges to the batch until the next "XY" label
 				while "XY" not in args.GenerateSequence[j][0]: 
 					batch.append(args.GenerateSequence[j])
 					if j + 1 < len(args.GenerateSequence)-1:
 						j += 1
 					else:
-						break
-
+						pass
+			#print "SooO"
 			# extract respective nodes which are involved in the subgraph			
 			batch_individuals = set([])
+			#print "Batch", batch
 			for element in batch:
 				element0, element1 = element
 				for e in [element0, element1]:
@@ -1506,23 +1782,27 @@ def trailBlaze(sequence, path, current_structure, ds, dgc, dseq, args):
 			# the corresponding deviation from the target value
 			values = []
 			individual_values = {}
+			#print "batch individual ", batch_individuals
 			for h in batch_individuals:
 				h = int(h)
-				i = h + 1
-
-				for DP in args.PosFeatures[i]:
-					if len(args.PosFeatures[i][DP]) > 0:
-						for k, feature in enumerate(args.PosFeatures[i][DP]):
-							feature_type, j, value = feature
+				ii = h + 1
+				# print "ii", ii
+				for DP in args.PosFeatures[ii]:
+					# print DP
+					if len(args.PosFeatures[ii][DP]) > 0:
+						for k, feature in enumerate(args.PosFeatures[ii][DP]):
+							feature_type, jj, value = feature
+							#print "feature", feature
 							if feature_type == "Accu":
-								tmp_stack = {i:j}
+								tmp_stack = {ii:jj}
+								#print "stack", tmp_stack
 								val = getAccuracy(tmp_stack, current_structure[DP])
 								result_value = abs(val - value)
 								values.append(result_value)
 
-
 							elif feature_type == "Accs":
-								tmp_stack = {i:j}
+								tmp_stack = {ii:jj}
+								#print "stack", tmp_stack
 								val = getAccessibility(tmp_stack, len(args.Cseq), current_structure[DP])
 								result_value = abs(val - value)
 								values.append(result_value)
@@ -1748,6 +2028,20 @@ def exe():
 								default=None,
 								action='append'
 								)
+
+	DP_parser.add_argument("--fuzzyConstraint",
+								help="Define fuzzy structure constraint wihtin DP mode\n\n",
+								type=FuzzyConstraintFeature,
+								default=None,
+								action='append'
+								)
+	DP_parser.add_argument("--diff-fuzzyConstraint",
+								help="Define a differential fuzzy structure constraint wihtin DP mode\n\n",
+								type=DiffFuzzyConstraintFeature,
+								default=None,
+								action='append'
+								)
+
 	DP_parser.add_argument("--trailblaze_threshold",
 								help="Define the threshold whic need to be passed in order to bonify certain elements in the terrain graph.\n\n",
 								type=float,
@@ -2332,6 +2626,8 @@ class Variables:
 		self.accessibility = []
 		self.diff_accuracy = []
 		self.diff_accessibility = []
+		self.fuzzyCstr = []
+		self.diff_fuzzyCstr = []
 		self.length = 0
 		self.Cseq = None
 		self.tGC = []
@@ -2395,6 +2691,8 @@ class Variables:
 			self.accessibility = args.accessibility
 			self.diff_accuracy = args.diff_accuracy
 			self.diff_accessibility = args.diff_accessibility
+			self.fuzzyCstr = args.fuzzyConstraint
+			self.diff_fuzzyCstr = args.diff_fuzzyConstraint
 			self.trailblazer = args.trailblaze_threshold
 
 		self.Cseq = args.Cseq
@@ -2513,6 +2811,46 @@ class Variables:
 				S += s
 		self.Cseq = S
 
+
+	def check_FuzzyCstr(self):
+		"""
+			Check the made Fuzzy-Cstr Features
+		"""
+		for i in self.fuzzyCstr:
+			#print i
+			s1, s2, s3 = i
+			if s2 != "UB" and s2 != "B":
+				self.error = "FuzzyConstraintError: Wrongly defined Accessiblity", s1, s2, s3, "->", s2
+			if not isfloat(s3):
+				self.error = "FuzzyConstraintError: Wrongly defined Accessibility", s1, s2, s3, "->" , s3
+			if len(s1) != self.length:
+				self.error = "FuzzyConstraintError Constraint Length", len(s1), "is unequeal to Cstr length", self.length, "!"
+	
+
+	def check_Diff_FuzzyCstr(self):
+		"""
+			Check the made differential Fuzzy-Cstr Features
+		"""
+		for i in self.diff_fuzzyCstr:
+			s1, s2,s3, s4, s5 = i
+			if not isfloat(s3):
+				self.error = "DiffFuzzyConstraintError: Wrongly defined DiffAccessibility", s1, s2,s3, s4, s5, "->" , s3
+			if not isfloat(s5):
+				self.error = "DiffFuzzyConstraintError: Wrongly defined DiffAccessibility", s1, s2,s3, s4, s5, "->" , s5
+			if s3 < 0 or s3 > 1:
+				self.error = "DiffFuzzyConstraintError: Value",s3, "must remain in range [0,1]."
+			if s5 < 0 or s5 > 1:
+				self.error = "DiffFuzzyConstraintError: Value",s3, "must remain in range [0,1]."
+			if s2 != "UB" and s2 != "B":
+				self.error = "DiffFuzzyConstraintError: Value",s2, "must be selected from {\"UB\", \"B\"}."
+			if s4 != "UB" and s4 != "B":
+				self.error = "DiffFuzzyConstraintError: Value",s4, "must be selected from {\"UB\", \"B\"}."
+			if (s4 == "B" and s2 == "B") or (s4 == "UB" and s2 == "UB"):
+				self.error = "DiffFuzzyConstraintError: The constraint systems mus be different!."
+			if len(s1) != self.length:
+				self.error = "DiffFuzzyConstraintError: Constraint Length", len(s1), "is unequeal to Cstr length", self.length, "!"
+		
+
 	def check_Accessibilities(self):
 		"""
 			Check made accessibility statements
@@ -2526,6 +2864,7 @@ class Variables:
 				self.error = "AccessibilityError: Wrongly defined Accessibility", s1, s2, s3, "->" , s3
 			if len(s1) != self.length:
 				self.error = "AccessibilityError Constraint Length", len(s1), "is unequeal to Cstr length", self.length, "!"
+
 
 	def check_Diff_Accessibilities(self):
 		"""
@@ -2589,6 +2928,26 @@ class Variables:
 				self.error = "DiffAccuracyError: Constraint Length", len(s1), "is unequeal to Cstr length", self.length, "!"
 
 		
+
+	def checkFuzzyConstraintViolation(self, conformation_dotplot, index, fuzzy_request):
+		"""
+			Check if a requested Fuzzy Constraint definition area was already occupied by another Fuzzy Structure Definition
+		"""
+		i, j = index
+		if (i, j) in self.SC[conformation_dotplot + "_FC"]:
+			if self.SC[conformation_dotplot + "_FC"][(i, j)] != None:
+				self.error = "Affected base pair ", (i, j), "has already been occupied by another Fuzzy Constraint Definition."
+		else:
+			self.SC[conformation_dotplot + "_FC"][(i, j)] = fuzzy_request
+
+
+		# if (j, i) in self.SC[conformation_dotplot + "_FC"]:
+		# 	if self.SC[conformation_dotplot + "_FC"][(j, i)] != None:
+		# 		self.error = "Affected base pair ", (j, i), "has already been occupied by another Fuzzy Constraint Definition."
+		# else:
+		# 	self.SC[conformation_dotplot + "_FC"][(j, i)] = fuzzy_request
+
+
 	def checkAccessibilityViolation(self, conformation_dotplot, index, accessibility_request):
 		"""
 			Check if a requested accessibility for a certain position is 
@@ -2781,8 +3140,21 @@ class Variables:
 				self.check_Diff_Accuracies()
 				structurefeature_check += 1
 
+			if self.fuzzyCstr:
+				if self.length == None:
+					self.length = len(self.fuzzyCstr[0][0])
+				self.check_FuzzyCstr()
+				structurefeature_check += 1
+			
+			if self.diff_fuzzyCstr:
+				if self.length == None:
+					self.length = len(self.diff_fuzzyCstr[0][0])
+				self.check_Diff_FuzzyCstr()
+				structurefeature_check += 1
+
+
 			if structurefeature_check == 0:
-				self.error = "No structure constraint defined. Please define structural elements by using the accuracy of structure elements (basepairs) and accessibility of sequence stretches."
+				self.error = "No structure constraint defined. Please define structural elements by using the accuracy of structure elements (basepairs) and accessibility of sequence stretches, fuzzy structure constraints are also a possibility."
 			else:
 				
 				if self.Cseq == None:
@@ -2923,17 +3295,13 @@ class Variables:
 					if iscompatible == False:
 						self.error = "Found some nucleotide constraint which is opposing each other in Interconnection.%s %s" % (ig, self.interconnections[ig])
 
-
-
-
-
-
 	def detect_circles(self):
 		"""
 			Detects cyrcles in secondary structure construct definitions, which have been preparsed into interconnections previously.
 			Allows even sized cycles.
 		"""
 		self.interconnection_graphs = []
+
 		#print self.Interconnection_sets
 		for interconnection in self.Interconnection_sets:
 			G = nx.Graph() # produce a new graph for an upcoming interaction set
@@ -2954,18 +3322,28 @@ class Variables:
 		 	self.interconnection_graphs.append(G)
 
 
-		self.nodelist = set([])
-		if len(self.interconnection_graphs) > 0:
-			for graph in self.interconnection_graphs:
-				self.nodelist = self.nodelist | set(graph.nodes())
-		singletons = set([x for x in xrange(1,self.length + 1)]) - set(self.nodelist)
+
+		print self.Cseq
+		for g in  self.interconnection_graphs:
+			print g.nodes()
+		singletons = ""
+		if len(self.interconnection_graphs) != 0:
+			self.nodelist = set([])
+			if len(self.interconnection_graphs) > 0:
+				for graph in self.interconnection_graphs:
+					self.nodelist = self.nodelist | set(graph.nodes())
+			singletons = set([x for x in xrange(1,self.length + 1)]) - set(self.nodelist)
+		else:
+			singletons = [i for i in xrange(1, self.length + 1)]
+		
 		for s in list(singletons):
 			G=nx.Graph()
 			G.add_node(s)
-			G.node[s]["Cseq"] = self.interconnections[arc[1]][0]
+			G.node[s]["Cseq"] = self.IUPAC[self.Cseq[s-1]]
 			self.interconnection_graphs.append(G)
-
-
+		for g in  self.interconnection_graphs:
+			print g.nodes(data=True)
+		#exit(1)
 		# print self.nodelist
 		# for g in self.interconnection_graphs:
 		# 	print g.nodes()
@@ -3000,7 +3378,9 @@ class Variables:
 			
 
 		if self.accur:	
+
 			for elements in self.accur:
+				#print elements
 				for entry_key in elements[0].keys():
 					entry_val = elements[0][entry_key]
 					self.PosFeatures[entry_key][elements[1]].append(("Accu", entry_val,  elements[2]))
@@ -3024,6 +3404,7 @@ class Variables:
 					self.PosFeatures[entry_key][elements[3]].append(("Accs", entry_key, elements[4]))
 
 
+
 	def parse_StructureFeatures(self):
 		"""
 			Parse the structure features, such that each base, resp. base pair can
@@ -3036,7 +3417,7 @@ class Variables:
 		# Lists of the nucleotide positions, each position is allowed to have a 
 		# maximum probability of one to be paired and a probability of being 
 		# unpaired (1-x).	
-		self.SC = {"B_BP":{}, "UB_BP":{}, "B_SS":{}, "UB_SS":{}}
+		self.SC = {"B_BP":{}, "UB_BP":{}, "B_SS":{}, "UB_SS":{}, "B_FC":{}, "UB_FC":{}}
 		
 		# Check for each requested base pair or accessibility if each newly added 
 		# requested feature is compatible with the already inputed ones.
@@ -3093,6 +3474,46 @@ class Variables:
 				self.addDiffAccuracyRequest(struct_info, constraint_system_1, value_1, constraint_system_2, value_2)
 				self.diffaccur.append((struct_info, constraint_system_1, value_1, constraint_system_2, value_2))
 		
+		# Fuzzy Structure Constrint fCstr
+		self.fuzzy = []
+		if self.fuzzyCstr:
+			for request in self.fuzzyCstr:
+				struct_info = retrieveFuzzyStack(request[0])
+				constraint_system_1 = request[1]
+				value_1 = request[2]
+				self.addFuzzyConstraintFeature(struct_info, constraint_system_1, value_1)
+				self.fuzzy.append((struct_info, constraint_system_1, value_1))
+
+		# Differential Fuzzy Structure Constriant dfCstr
+		self.difffuzzy = []
+		if self.diff_fuzzyCstr:
+			for request in self.diff_fuzzyCstr:
+				struct_info = retrieveFuzzyStack(request[0])
+				constraint_system_1 = request[1]
+				value_1 = request[2]
+				constraint_system_2 = request[3]
+				value_2 = request[4]
+
+				self.addDiffFuzzyConstraintFeature(struct_info, constraint_system_1, value_1, constraint_system_2, value_2)
+				self.difffuzzy.append((struct_info, constraint_system_1, value_1, constraint_system_2, value_2))
+
+
+
+	def addFuzzyConstraintFeature(self, struct_info, constraint_system_1, value_1):
+		"""
+			Adds a fuzzy structure feature to the the respective dotplot
+		"""
+		for i in struct_info:
+			self.checkFuzzyConstraintViolation(constraint_system_1, i, value_1)
+
+	def addDiffFuzzyConstraintFeature(self, struct_info, constraint_system_1, value_1, constraint_system_2, value_2):
+		"""
+			Adds a fuzzy structure feature to the the respective dotplot
+		"""
+		for i in struct_info:
+			self.checkFuzzyConstraintViolation(constraint_system_1, i, value_1)
+			self.checkFuzzyConstraintViolation(constraint_system_2, i, value_2)
+
 
 	def addAccuracyRequest(self, struct_info, constraint_system_1, value_1):
 		"""
