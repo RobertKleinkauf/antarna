@@ -1,5 +1,5 @@
 
-import numpy
+import numpy as np
 import RNA
 import sys
 import random
@@ -15,7 +15,7 @@ import uuid
 import argparse
 from argparse import RawTextHelpFormatter
 import networkx as nx
-
+from scipy.interpolate import *
 
 ##############################
 # ARGPARSE TYPES AND FUNCTIONS
@@ -1432,8 +1432,8 @@ def getStructuralDistance(args, sequence, RNAfold, RNAfold_pattern):
 					access_2 = getAccessibility(tmp_c, L, DP[i[1]])
 					diff2 += abs(access_2 - i[2])
 					
-				max_struct_deviation += getMaxTargetDeviation(i[2])	
-				max_struct_deviation += getMaxTargetDeviation(i[4])
+					max_struct_deviation += getMaxTargetDeviation(i[2])	
+					max_struct_deviation += getMaxTargetDeviation(i[4])
 				diff1 /= float(len(i[0]))
 				diff2 /= float(len(i[0]))
 				ddsf_access += diff1 + diff2
@@ -1454,8 +1454,8 @@ def getStructuralDistance(args, sequence, RNAfold, RNAfold_pattern):
 					accur_2 = getAccuracy(tmp_c, DP[i[1]])
 					diff2 += abs(accur_2 - i[2])
 
-				max_struct_deviation += getMaxTargetDeviation(i[4])
-				max_struct_deviation += getMaxTargetDeviation(i[2])
+					max_struct_deviation += getMaxTargetDeviation(i[4])
+					max_struct_deviation += getMaxTargetDeviation(i[2])
 				diff1 /= float(len(i[0]))
 				diff2 /= float(len(i[0]))
 				ddsf_diff_accur += diff1 + diff2
@@ -1466,6 +1466,7 @@ def getStructuralDistance(args, sequence, RNAfold, RNAfold_pattern):
 		dsf_access = 0
 		if args.access:
 			for i in args.access:
+
 				diff1 = 0
 				for c in i[0]:
 					tmp_c = {c:c}
@@ -1473,7 +1474,7 @@ def getStructuralDistance(args, sequence, RNAfold, RNAfold_pattern):
 					access_1 = abs(getAccessibility(tmp_c, L, DP[i[1]]))
 					diff1 += abs(access_1 - i[2])
 
-				max_struct_deviation += getMaxTargetDeviation(i[2])
+					max_struct_deviation += getMaxTargetDeviation(i[2])
 				diff1 /= float(len(i[0]))
 				dsf_access += diff1
 		
@@ -1481,15 +1482,20 @@ def getStructuralDistance(args, sequence, RNAfold, RNAfold_pattern):
 		dsf_accur = 0
 		if args.accur:
 			for i in args.accur:
+				# print "i", i
 				diff1 = 0
 				for c in i[0]:
 					tmp_c = {c:i[0][c]}
+					# print "mpt_c", tmp_c,
 					# calculating the deviation
 					accu_1 = getAccuracy(tmp_c, DP[i[1]])
 					diff1 += abs(accu_1 - i[2])
-
-				max_struct_deviation += getMaxTargetDeviation(i[2])
+					# print "accu", accu_1, 
+					# print "Diff1", diff1,
+					max_struct_deviation += getMaxTargetDeviation(i[2])
+					# print "MSD", max_struct_deviation,
 				diff1 /= float(len(i[0]))
+				# print "ndiff", diff1
 				dsf_accur += diff1
 
 		# Fuzzy Constraint Distance
@@ -1547,9 +1553,9 @@ def getStructuralDistance(args, sequence, RNAfold, RNAfold_pattern):
 
 		ddsf = ddsf_diff_accur + ddsf_access + ddsf_fuzzy
 		dsf = dsf_accur + dsf_access + dsf_fuzzy
-
+		# print "DSF", dsf, "MSD", max_struct_deviation
 		d = ((ddsf + dsf) / max_struct_deviation) * 100
-
+		# print d
 
 		# print "dfaccur", ddsf_diff_accur
 		# print "dfaccuess", ddsf_access
@@ -1749,7 +1755,8 @@ def trailBlaze(sequence, path, current_structure, ds, dgc, dseq, args):
 
 		for i, edge in enumerate(args.GenerateSequence):
 			#print "\n"
-			#print "walked", i, edge
+			# print "walked", i, edge
+			
 			# extract info about subgraph to investigate
 			#print "HellO"
 			batch = []
@@ -1761,12 +1768,15 @@ def trailBlaze(sequence, path, current_structure, ds, dgc, dseq, args):
 				else:
 					pass
 				# add edges to the batch until the next "XY" label
+				# print args.GenerateSequence
+				# print args.GenerateSequence[j]
+				# print args.GenerateSequence[j][0]
 				while "XY" not in args.GenerateSequence[j][0]: 
 					batch.append(args.GenerateSequence[j])
 					if j + 1 < len(args.GenerateSequence)-1:
 						j += 1
 					else:
-						pass
+						break
 			#print "SooO"
 			# extract respective nodes which are involved in the subgraph			
 			batch_individuals = set([])
@@ -1874,12 +1884,19 @@ def inConvergenceCorridor(d_struct, d_gc, d_seq, BS_d_struct, BS_d_gc, BS_d_seq)
 	"""
 		Check if a solutions qualities are within the convergence corridor
 	"""
+
+	# print d_struct, d_gc, d_seq, BS_d_struct, BS_d_gc, BS_d_seq
 	struct_var = (BS_d_struct + BS_d_struct/float(100) * 5)
 	gc_var = (BS_d_gc + BS_d_gc/float(100) * 5)
 	seq_var = (BS_d_seq + BS_d_seq/float(100) * 5)
+
+	# print struct_var, gc_var, seq_var
+
 	if d_struct <= struct_var and d_gc <= gc_var and d_seq <= seq_var:
+		# print "Korridor True"
 		return True
 	else:
+		# print "Korridor False"
 		return False
 
 
@@ -1903,11 +1920,11 @@ def getGCSamplingValue(GC, tGCmax, tGCvar):
 			tGCmax = GC
 			GC = tmp_GC
 		while returnval <= 0:
-			returnval = float(numpy.random.uniform(low=GC, high=tGCmax, size=1))
+			returnval = float(np.random.uniform(low=GC, high=tGCmax, size=1))
 		return returnval
 	elif tGCmax == -1.0 and tGCvar != -1.0: # normal distribution tGC value sampling
 		while returnval <= 0:
-			returnval = float(numpy.random.normal(GC, tGCvar, 1))
+			returnval = float(np.random.normal(GC, tGCvar, 1))
 		return returnval
 
 def setGC(args):
@@ -2294,7 +2311,8 @@ class AntHill:
 
 			counter = 0
 			
-
+			quality_log = []
+			quality_log_c = []
 			dstruct_log = []
 			dGC_log = []
 				
@@ -2361,6 +2379,8 @@ class AntHill:
 					# store best local solution for this reset
 					if Dscore < best_solution_local[2]:
 						best_solution_local = curr_solution
+				
+
 
 				if self.params.verbose:
 					print "SCORE " + str(Dscore) + " Resets " + str(resets) + " #Ant " + str(global_ant_count) + " out of " + str(self.params.ants_per_selection)  + " cc " + str(convergence_counter)
@@ -2379,7 +2399,7 @@ class AntHill:
 						print current_structure, " <- CS"
 					print sequence,
 					print " <- CS", "Dscore", str(Dscore), "ds", ds, "dGC", dGC, "GC", getGC(sequence)*100, "Dseq", dseq
-					dstruct_log.append((global_ant_count, Dscore, best_solution[2]))
+					# dstruct_log.append((global_ant_count, Dscore, best_solution[2]))
 				#### UPDATING THE TERRAIN ACCORDING TO THE QUALITY OF THE CURRENT BESTO-OUT-OF-k SOLUTION
 				#print [self.params.TerrainGraph[e[0]][e[1]]["pheromone"]for e in self.params.TerrainGraph.edges() if "HIVE" not in e[0]]
 				updateTerrain(sequence, path, current_structure, ds, dGC, dseq, self.params) 
@@ -2396,6 +2416,8 @@ class AntHill:
 
 
 
+
+
 				if distance_structural_prev == ds and distance_GC_prev == dGC and distance_seq_prev == dseq:
 					convergence_counter += 1
 
@@ -2408,12 +2430,27 @@ class AntHill:
 				else:
 					ant_no = 1
 
+
+				quality_log.append(best_solution[2])
+				quality_log_c.append(len(quality_log_c))
+				if len(quality_log) > 50:
+					quality_log.pop(0)
+					quality_log_c.pop()
+					p1 = np.polyfit(quality_log_c,quality_log,1)
+					slope = p1[0]
+					#print "Slope", slope
+					if slope > -0.05:
+						#print "Convergence setting"
+						convergence_counter = self.params.ConvergenceCount + 1
+
 				if ant_no == self.params.antsTerConv or resets >= self.params.Resets or global_ant_count >= 100000 or best_solution_since == 5:
+					print ant_no, self.params.antsTerConv, resets , self.params.Resets
 					break
 
 				# RESET
 				if ant_no < self.params.antsTerConv and convergence_counter >= self.params.ConvergenceCount:
-
+					quality_log = []
+					quality_log_c = []
 					initTerrain(self.params)
 					applyTerrainModification(self.params)
 					criterion = False
@@ -3323,9 +3360,9 @@ class Variables:
 
 
 
-		print self.Cseq
-		for g in  self.interconnection_graphs:
-			print g.nodes()
+		# print self.Cseq
+		# for g in  self.interconnection_graphs:
+		# 	print g.nodes()
 		singletons = ""
 		if len(self.interconnection_graphs) != 0:
 			self.nodelist = set([])
@@ -3341,8 +3378,8 @@ class Variables:
 			G.add_node(s)
 			G.node[s]["Cseq"] = self.IUPAC[self.Cseq[s-1]]
 			self.interconnection_graphs.append(G)
-		for g in  self.interconnection_graphs:
-			print g.nodes(data=True)
+		# for g in  self.interconnection_graphs:
+		# 	print g.nodes(data=True)
 		#exit(1)
 		# print self.nodelist
 		# for g in self.interconnection_graphs:
