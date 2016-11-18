@@ -13,6 +13,9 @@ Please check the respective version tag for more description.
 
 ### VERSION HISTORY OF antaRNAdp
 
+ - v2.0.1
+  - Bioconda Version
+
  - v2.0.0 
   - new Terrain Graph and associated functions
   - new way of defining structural constraints
