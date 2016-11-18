@@ -9,35 +9,15 @@ constraints to simulate the induced conformation.
 
 ## Usage
 
-antaRNA can be used in several ways. 
+antaRNA can be used in several ways. This includes python object management or a direct command line call of the program.
+The program differentiates between two modi: MFE (dot-bracket structure optimization) and DP (dot plot structure optimization). Each 
+of the modi has specific options and individual means of controlling its input. However, both modi also share options and input. Therefore
+a commandline call of the programm constitutes as:
 
-#### Regular command line example:
 ```
-$python antaRNA.py -tGC 0.5 -Cstr "...(((...)))..." -ov
->antaRNA#0|Cstr:...((((...))))...|Cseq:NNNNNNNNNNNNNNNNN|Alpha:1.0|Beta:1.0|tGC:1-17>0.5|ER:0.2|Struct_CT:0.5|GC_CT:5.0|Seq_CT:1.0|UsedProgram:RNAfold|Ants:2|Resets:0/5|AntsTC:50|CC:130|IP:s|BSS:0|LP:0|ds:0.0|dGC:0.0|GC:52.9411764706|dseq:0.0|L:17|Time:0.0177099704742
-Rseq:GAAACACGAGGUGUAGG
-Rstr:...((((...))))...
+$python antaRNA.py [COMMON INPUT AND OPTIONS] [MODUS{MFE,DP}] [MODUS INPUT AND OPTIONS]
 ```
-
-#### Python object
-```python
-import antaRNA # importing antaRNA
-
-anthill = antaRNA.AntHill() # creating an anthill object
-
-anthill.params.tGC.append(0.5) # setting the generat target GC value to 0.5
-anthill.params.Cstr = "...(((...)))..." # setting structural constraint
-anthill.params.output_verbose = True # activating verbose output 
-anthill.params.check() # checking the input
-
-anthill.swarm() if anthill.params.error == "0" else anthill.params.error # execution if no error was detected
-anthill.result # retrieve result
-[('>antaRNA#0', 'Cstr:...(((...)))...', 'Cseq:NNNNNNNNNNNNNNN', 'Alpha:1.0', 'Beta:1.0', 'tGC:1-15>0.5', 'ER:0.2', 'Struct_CT:0.5', 'GC_CT:5.0', 'Seq_CT:1.0', 'UsedProgram:RNAfold', 'Ants:7', 'Resets:0/5', 'AntsTC:50', 'CC:130', 'IP:s', 'BSS:0', 'LP:0', 'ds:0.0', 'dGC:0.0', 'GC:46.6666666667', 'dseq:0.0', 'L:15', 'Time:0.0780849456787', 'Rseq:UCACGUCUUACGAAG', 'Rstr:...(((...)))...')]
-```
-
-
-
-
+See in Sources for detailed description of the explicit usage...
 
 ## VERSION HISTORY OF antaRNAdp
 
