@@ -2684,7 +2684,7 @@ class Variables:
 		self.noOfColonies = 1
 		self.output_file = "STDOUT"
 		self.py = True
-		self.name="antaRNA"
+		self.name="antarna"
 		self.verbose = False 
 		self.output_verbose = False
 		self.seed ="none"
