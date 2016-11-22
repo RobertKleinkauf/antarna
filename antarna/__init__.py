@@ -1,1 +1,1 @@
-import antarna
+from antarna import *

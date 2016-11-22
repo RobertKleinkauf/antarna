@@ -9,6 +9,7 @@ setup(
     author='Robert Kleinkauf',
     author_email='robkleinkauf@gmail.com',
     url='https://github.com/RobertKleinkauf/antarna',
+    include_package_data=True,
     keywords=['ant colony optimization', 'RNA inverse folding'],
     classifiers=[
         'Intended Audience :: Developers',
