@@ -4,7 +4,7 @@ setup(
     name="antarna",
     packages=['antarna'],
     install_requires=['numpy', 'scipy', 'networkx', 'uuid'],
-    version="2.0.1.1",
+    version="2.0.1.2",
     scripts=['antarna/antarna.py'],
     description="Ant colony optimized RNA secondary structure inverse folding",
     author='Robert Kleinkauf',
